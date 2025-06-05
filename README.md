@@ -21,7 +21,6 @@ ai-chatbot/
 ├── Dockerfile              # Dockerfile for the Streamlit application
 ├── docker-compose.yml     # Docker services configuration
 ├── requirements.txt      # Python dependencies
-├── .env.example         # Environment variables template
 ├── .gitignore          # Git ignore rules
 ├── main.py             # Streamlit web interface
 └── README.md           # This file
@@ -58,7 +57,7 @@ The `docker-compose.yml` is configured to automatically pull the default model (
 
 ### Environment Variables
 
-You can customize the application by creating a `.env` file in the root of the project.
+You can customize the application by creating a `.env` file in the root of the project (e.g. add https://smith.langchain.com/ connection to log your LLM chat messages info).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
