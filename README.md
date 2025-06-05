@@ -39,17 +39,17 @@ ai-chatbot/
 1. **Clone the repository:**
 ```bash
 git clone <your-repo-url>
-cd ai-chatbot
+cd LangChain_AI_Chat
 ```
 
 2. **Start the services:**
 ```bash
 docker compose up -d --build
 ```
-This will build the Streamlit application image and start all the services.
+This will build the Streamlit application image and start all services in the correct order.
 
 3. **Ollama models:**
-The `docker-compose.yml` is configured to automatically pull the default model (`gemma:2b`).
+The `docker-compose.yml` is configured to automatically pull the default model (`gemma:2b`). The model pulling service will wait until the Ollama service is healthy before starting.
 
 4. **Access the chatbot:**
    - Open http://localhost:8501 in your browser.
@@ -62,7 +62,7 @@ You can customize the application by creating a `.env` file in the root of the p
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL. When running with Docker, this is `http://ollama:11434`. |
+| `OLLAMA_BASE_URL` | `http://ollama-app:11434` | **(Important)** The URL for the Ollama service within the Docker network. |
 | `OLLAMA_MODEL` | `gemma:2b` | The default model to use. |
 | `OLLAMA_TEMPERATURE` | `0.7` | The temperature for the LLM. |
 | `OLLAMA_TOP_P` | `0.9` | The top_p for the LLM. |
@@ -72,7 +72,7 @@ You can customize the application by creating a `.env` file in the root of the p
 
 ### Available Models
 
-The default model is `gemma:2b`. You can change the model by setting the `OLLAMA_MODEL` environment variable. Make sure the model is available in your Ollama instance. You can add more models to be pulled at startup by editing the `command` in the `ollama-pull-models` service in `docker-compose.yml`.
+The default model is `gemma:2b`. You can change the model by setting the `OLLAMA_MODEL` environment variable in your `.env` file. Make sure the model is available in your Ollama instance. You can add more models to be pulled at startup by editing the `command` in the `ollama-pull-models` service in `docker-compose.yml`.
 
 ## 🧠 Memory Management
 
@@ -83,20 +83,20 @@ The chatbot uses Streamlit's session state to manage conversation history.
 
 ## 🐳 Docker Services
 
-### Ollama Service
+### Ollama Service (`ollama-app`)
 - **Image**: `ollama/ollama:latest`
 - **Port**: `11434`
 - **Volume**: Persistent model storage.
-- **Health Check**: Ensures the service is running before the app starts.
+- **Health Check**: Ensures the service is fully running before dependent services start.
 
-### App Service
+### App Service (`app`)
 - **Build**: From the `Dockerfile` in the root directory.
 - **Port**: `8501`
-- **Dependencies**: Depends on the `ollama` and `ollama-pull-models` services.
+- **Dependencies**: Waits for the `ollama-pull-models` service to complete successfully.
 
-### Ollama Pull Models Service
+### Ollama Pull Models Service (`ollama-pull-models`)
 - **Image**: `ollama/ollama:latest`
-- **Function**: Pulls the default Ollama model at startup.
+- **Function**: Pulls the default Ollama model at startup, after the `ollama-app` service is healthy.
 
 ## 🛠️ Development
 
@@ -155,35 +155,35 @@ The chatbot uses Streamlit's session state to manage conversation history.
 
 1. **Ollama Connection Failed**
    ```bash
-   # Check if Ollama is running
-   curl http://localhost:11434/api/tags
+   # Check the logs of the app service to see connection errors
+   docker compose logs streamlit-app
    
-   # Restart Ollama service
-   docker-compose restart ollama
+   # Restart the Ollama service
+   docker compose restart ollama-app
    ```
 
 2. **Model Not Found**
    ```bash
-   # Pull the model
-   docker exec -it ollama-server ollama pull llama2
+   # Check the logs of the model pulling service
+   docker compose logs ollama-pull-models
+   
+   # Manually pull a model if needed
+   docker compose exec ollama-app ollama pull <model-name>
    
    # List available models
-   docker exec -it ollama-server ollama list
+   docker compose exec ollama-app ollama list
    ```
 
-3. **Memory Issues**
-   ```bash
-   # Clear chat history
-   rm -f chat_history_*.json
-   
-   # Or use the web interface "Clear Conversation" button
-   ```
-
-4. **Port Conflicts**
+3. **Port Conflicts**
    ```bash
    # Check what's using the ports
-   netstat -tulpn | grep :8501
-   netstat -tulpn | grep :11434
+   # On Linux/Mac
+   sudo lsof -i :8501
+   sudo lsof -i :11434
+   
+   # On Windows
+   netstat -aon | findstr ":8501"
+   netstat -aon | findstr ":11434"
    
    # Modify ports in docker-compose.yml if needed
    ```
@@ -191,53 +191,13 @@ The chatbot uses Streamlit's session state to manage conversation history.
 ### Logs and Debugging
 
 ```bash
-# View Ollama Docker logs
-docker-compose logs -f
+# View logs for all services in real-time
+docker compose logs -f
 
-# View Ollama service logs
-docker-compose logs -f ollama
+# View logs for a specific service
+docker compose logs -f ollama-app
+docker compose logs -f streamlit-app
 
-# Check Docker service health
-docker-compose ps
-
-# View Streamlit logs
-# These will be visible in the terminal where you run the Streamlit app
+# Check the status of all services
+docker compose ps
 ```
-
-## 📊 Performance Tips
-
-1. **Model Selection**:
-   - Use smaller models (7B) for faster responses
-   - Use larger models (13B+) for better quality
-
-2. **Memory Management**:
-   - Reduce `CHAT_MEMORY_SIZE` for faster processing
-   - Increase for better context retention
-
-3. **Hardware Requirements**:
-   - Minimum: 8GB RAM, 4 CPU cores
-   - Recommended: 16GB RAM, 8 CPU cores
-   - GPU: Optional but significantly faster
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- [LangChain](https://langchain.com/) - For the amazing framework
-- [Ollama](https://ollama.ai/) - For local LLM serving
-- [Streamlit](https://streamlit.io/) - For the beautiful web interface
-- [Meta](https://ai.meta.com/llama/) - For the Llama models
-
----
-
-**Happy Chatting! 🤖💬**
