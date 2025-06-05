@@ -46,7 +46,6 @@ This command will:
 - Automatically pull the following models:
   - `qwen3:30b-a3b-q4_K_M` (30B parameter model, quantized)
   - `gemma3:12b-it-qat` (12B parameter instruction-tuned model)
-  - `nomic-embed-text` (embedding model)
 
 **Note**: Model downloading may take 10-30 minutes depending on your internet speed.
 
@@ -73,7 +72,7 @@ python -m venv venv
 venv\Scripts\activate
 
 # On Linux/Mac:
-source venv/bin/activate
+source venv/Scripts/activate
 ```
 
 ### Step 6: Install Python Dependencies
