@@ -10,20 +10,20 @@ A complete AI chatbot solution featuring:
 ## 🏗️ Project Structure
 
 ```
-ai-chatbot/
-├── app/                    # Main application package
-│   ├── __init__.py        # Package initialization
-│   ├── chatbot.py         # Core chatbot logic
-│   ├── memory_manager.py  # Conversation memory management
-│   └── config.py          # Configuration management
+LangChain_AI_Chat/
+├── app/
+│   ├── __init__.py
+│   ├── chatbot.py
+│   ├── memory_manager.py
+│   └── config.py
 ├── static/
-│   └── style.css          # Custom CSS for the web interface
-├── Dockerfile              # Dockerfile for the Streamlit application
-├── docker-compose.yml     # Docker services configuration
-├── requirements.txt      # Python dependencies
-├── .gitignore          # Git ignore rules
-├── main.py             # Streamlit web interface
-└── README.md           # This file
+│   └── style.css
+├── .gitignore
+├── docker-compose.yml
+├── Dockerfile
+├── main.py
+├── README.md
+└── SETUP_GUIDE.md
 ```
 
 ## 🚀 Quick Start
