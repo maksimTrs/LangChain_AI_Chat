@@ -74,6 +74,12 @@ pip install -r requirements.txt
 # Edit .env file with your settings
 # Make sure OLLAMA_BASE_URL points to your Docker container
 # Default: OLLAMA_BASE_URL=http://localhost:11434
+
+# Optional: Configure LangSmith for LLM call logging and monitoring
+# LANGSMITH_TRACING=true
+# LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+# LANGSMITH_API_KEY="your_langsmith_api_key"
+# LANGSMITH_PROJECT="your_project_name"
 ```
 
 7. **Run the application:**
@@ -94,6 +100,10 @@ streamlit run main.py
 | `OLLAMA_MODEL` | `llama2` | Model to use |
 | `CHAT_MEMORY_SIZE` | `10` | Number of messages to remember |
 | `STREAMLIT_SERVER_PORT` | `8501` | Web interface port |
+| `LANGSMITH_TRACING` | `false` | Enable LangSmith tracing |
+| `LANGSMITH_ENDPOINT` | `https://api.smith.langchain.com` | LangSmith API endpoint |
+| `LANGSMITH_API_KEY` | - | Your LangSmith API key |
+| `LANGSMITH_PROJECT` | - | LangSmith project name |
 
 ### Available Models
 
@@ -111,6 +121,56 @@ docker exec -it ollama-server ollama pull <model-name>
 # Update OLLAMA_MODEL in .env
 # Restart the Streamlit application locally
 ```
+
+## 📊 LangSmith Integration
+
+This project supports [LangSmith](https://smith.langchain.com/) for comprehensive LLM call logging, monitoring, and debugging.
+
+### Features
+- **Call Logging**: Automatically logs all LLM interactions
+- **Performance Monitoring**: Track response times and token usage
+- **Debugging**: Detailed traces of conversation flows
+- **Analytics**: Aggregate statistics and insights
+
+### Setup LangSmith
+
+1. **Create LangSmith Account**:
+   - Visit [https://smith.langchain.com/](https://smith.langchain.com/)
+   - Sign up for a free account
+
+2. **Get API Key**:
+   - Navigate to your LangSmith dashboard
+   - Generate an API key from the settings
+
+3. **Configure Environment**:
+   ```bash
+   # Add to your .env file
+   LANGSMITH_TRACING=true
+   LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
+   LANGSMITH_API_KEY="your_api_key_here"
+   LANGSMITH_PROJECT="ai-test"
+   ```
+
+4. **Load Environment Variables**:
+   ```python
+   from app.env_loader import load_environment
+   
+   # Load environment variables including LangSmith config
+   load_environment()
+   ```
+
+5. **Verify Integration**:
+   - Start your chatbot application
+   - Send a few messages
+   - Check your LangSmith dashboard for logged interactions
+
+### LangSmith Dashboard
+
+Once configured, you'll see:
+- **Traces**: Detailed conversation flows
+- **Runs**: Individual LLM calls with inputs/outputs
+- **Metrics**: Performance statistics
+- **Projects**: Organized by your project name
 
 ## 🧠 Memory Management
 
