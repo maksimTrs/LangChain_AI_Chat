@@ -1,11 +1,11 @@
 # LangChain AI Chat Framework - Complete Setup Guide
 
-This guide provides step-by-step instructions to set up and run the AI chatbot framework from scratch.
+This guide provides step-by-step instructions to set up and run the AI chatbot framework.
 
 ## Prerequisites
 
 Before starting, ensure you have the following installed:
-- **Python 3.11+** (Download from [python.org](https://python.org))
+- **Python 3.9+** (Download from [python.org](https://python.org))
 - **Docker Desktop** (Download from [docker.com](https://docker.com))
 - **Git** (Download from [git-scm.com](https://git-scm.com))
 
@@ -18,78 +18,34 @@ git clone <your-repo-url>
 cd LangChain_AI_Chat
 ```
 
-### Step 2: Create Environment Configuration
+### Step 2: Start the Application with Docker
 
 ```bash
-# Copy the example environment file
-cp .env.example .env
-```
-
-**Optional**: Edit the `.env` file to customize settings:
-```bash
-# Default configuration (you can modify these)
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:30b-a3b-q4_K_M
-CHAT_MEMORY_SIZE=10
-STREAMLIT_SERVER_PORT=8501
-```
-
-### Step 3: Start Ollama Service with Docker
-
-```bash
-# Start Ollama in Docker (this will also pull the configured models)
-docker-compose up -d
+# Build the application image and start all services
+docker compose up -d --build
 ```
 
 This command will:
-- Start the Ollama service on port 11434
-- Automatically pull the following models:
-  - `qwen3:30b-a3b-q4_K_M` (30B parameter model, quantized)
-  - `gemma3:12b-it-qat` (12B parameter instruction-tuned model)
+- Build the Docker image for the Streamlit application.
+- Start the Ollama service on port 11434.
+- Start the Streamlit app service on port 8501.
+- Automatically pull the default model: `gemma:2b`.
 
-**Note**: Model downloading may take 10-30 minutes depending on your internet speed.
+**Note**: The initial model download may take some time depending on your internet connection.
 
-### Step 4: Verify Ollama is Running
+### Step 3: Verify the Services are Running
 
 ```bash
 # Check if containers are running
 docker ps
 
-# Check Ollama service health
+# Check Ollama service health and available models
 curl http://localhost:11434/api/tags
 ```
 
-You should see the downloaded models listed in the response.
+You should see the `streamlit-app`, `ollama`, and `ollama-pull-models` containers running. The curl command should list the `gemma:2b` model.
 
-### Step 5: Set Up Python Environment
-
-```bash
-# Create a virtual environment
-python -m venv venv
-
-# Activate the virtual environment
-# On Windows:
-venv\Scripts\activate
-
-# On Linux/Mac:
-source venv/Scripts/activate
-```
-
-### Step 6: Install Python Dependencies
-
-```bash
-# Install required packages
-pip install -r requirements.txt
-```
-
-### Step 7: Run the Application
-
-```bash
-# Start the Streamlit web interface
-streamlit run main.py
-```
-
-### Step 8: Access the Chatbot
+### Step 4: Access the Chatbot
 
 Open your web browser and navigate to:
 ```
@@ -102,41 +58,39 @@ You should see the AI chatbot interface!
 
 ### Environment Variables
 
+You can customize the application by creating a `.env` file in the project root.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `qwen3:30b-a3b-q4_K_M` | Model to use for chat |
-| `CHAT_MEMORY_SIZE` | `10` | Number of messages to remember |
-| `STREAMLIT_SERVER_PORT` | `8501` | Web interface port |
+| `OLLAMA_BASE_URL` | `http://ollama:11434` | Ollama server URL (for Docker). Use `http://localhost:11434` for local dev. |
+| `OLLAMA_MODEL` | `gemma:2b` | The default model to use. |
+| `OLLAMA_TEMPERATURE` | `0.7` | The temperature for the LLM. |
+| `OLLAMA_TOP_P` | `0.9` | The top_p for the LLM. |
+| `OLLAMA_NUM_PREDICT` | `512` | The number of tokens to predict. |
+| `CHAT_MEMORY_SIZE` | `10` | Number of messages to remember in a session. |
+| `STREAMLIT_SERVER_PORT` | `8501` | Web interface port. |
 
 ### Switching Models
 
-1. Edit the `.env` file and change the `OLLAMA_MODEL` value to one of the available models:
-   - `qwen3:30b-a3b-q4_K_M`
-   - `gemma3:12b-it-qat`
-
-2. Restart the Streamlit application:
-   ```bash
-   # Stop the current application (Ctrl+C)
-   # Then restart it
-   streamlit run main.py
-   ```
+You can switch the model at runtime from the sidebar in the application. To change the default model, set the `OLLAMA_MODEL` environment variable in your `.env` file.
 
 ### Adding New Models
 
-To add more models, edit the `docker-compose.yml` file and add additional pull commands in the `ollama-pull-models` service:
+To add more models to be pulled at startup, edit the `docker-compose.yml` file and add additional pull commands in the `ollama-pull-models` service:
 
 ```yaml
-# Pull large language models
-OLLAMA_HOST=ollama:11434 ollama pull qwen3:30b-a3b-q4_K_M
-OLLAMA_HOST=ollama:11434 ollama pull gemma3:12b-it-qat
-OLLAMA_HOST=ollama:11434 ollama pull your-new-model  # Add this line
+command:
+  - "-c"
+  - |
+    # ...
+    OLLAMA_HOST=ollama:11434 ollama pull gemma:2b
+    OLLAMA_HOST=ollama:11434 ollama pull your-new-model # Add this line
 ```
 
 Then restart Docker Compose:
 ```bash
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d --build
 ```
 
 ## Troubleshooting
@@ -144,104 +98,70 @@ docker-compose up -d
 ### Common Issues
 
 #### 1. Connection Refused Error
-**Problem**: Cannot connect to Ollama service
+**Problem**: The Streamlit app cannot connect to the Ollama service.
 
 **Solution**:
-```bash
-# Check if Docker containers are running
-docker ps
-
-# If not running, start them
-docker-compose up -d
-
-# Check Ollama logs
-docker logs ollama
-```
+- Ensure the Docker containers are running: `docker ps`.
+- Check the logs of the Streamlit app: `docker logs streamlit-app`.
+- Verify the `OLLAMA_BASE_URL` is set correctly for your environment.
 
 #### 2. Model Not Found Error
-**Problem**: Selected model is not available
+**Problem**: Selected model is not available in Ollama.
 
 **Solution**:
-```bash
-# Check available models
-curl http://localhost:11434/api/tags
-
-# Or check Docker logs for model pulling status
-docker logs ollama-pull-llama
-```
+- Check available models: `curl http://localhost:11434/api/tags`.
+- Check the logs for the model pulling service: `docker logs ollama-pull-models`.
 
 #### 3. Out of Memory Error
-**Problem**: System runs out of memory when loading large models
+**Problem**: System runs out of memory when loading large models.
 
-**Solution**: Enable RAM optimization in `docker-compose.yml`:
-```yaml
-environment:
-  # Uncomment these lines:
-  - OLLAMA_FLASH_ATTENTION=true
-  - OLLAMA_KV_CACHE_TYPE=f16
-  - OLLAMA_MAX_LOADED_MODELS=1
-```
+**Solution**: Enable RAM optimization by uncommenting the environment variables in the `ollama` service in `docker-compose.yml`.
 
 #### 4. Port Already in Use
-**Problem**: Port 8501 or 11434 is already in use
+**Problem**: Port 8501 or 11434 is already in use.
 
-**Solution**: Change ports in `.env` file:
-```bash
-STREAMLIT_SERVER_PORT=8502  # Change to different port
-```
+**Solution**: Change the port mappings in `docker-compose.yml`. For example, change `"8501:8501"` to `"8502:8501"`.
 
 ### Viewing Logs
 
 ```bash
+# Streamlit app logs
+docker logs streamlit-app
+
 # Ollama service logs
 docker logs ollama
 
 # Model pulling logs
-docker logs ollama-pull-llama
-
-# Streamlit logs are visible in the terminal where you run the app
+docker logs ollama-pull-models
 ```
-
-## Performance Tips
-
-1. **For better performance with limited RAM**: Uncomment the environment variables in `docker-compose.yml`
-2. **For faster responses**: Use smaller models like `gemma3:12b-it-qat` instead of `qwen3:30b-a3b-q4_K_M`
-3. **For better quality**: Use larger models but ensure you have sufficient RAM (16GB+ recommended)
 
 ## Project Structure
 
 ```
 LangChain_AI_Chat/
-├── app/                    # Main application package
-│   ├── __init__.py        # Package initialization
-│   ├── chatbot.py         # Core chatbot logic with LangChain
-│   ├── memory_manager.py  # Conversation memory management
-│   └── config.py          # Configuration management
-├── docker-compose.yml     # Ollama Docker service configuration
-├── requirements.txt       # Python dependencies
-├── .env.example          # Environment variables template
-├── .env                  # Your environment configuration
-├── main.py               # Streamlit web interface
-├── README.md             # Project documentation
-└── SETUP_GUIDE.md        # This setup guide
+├── app/
+│   ├── __init__.py
+│   ├── chatbot.py
+│   ├── memory_manager.py
+│   └── config.py
+├── static/
+│   └── style.css
+├── .env.example
+├── .gitignore
+├── docker-compose.yml
+├── Dockerfile
+├── main.py
+├── README.md
+└── SETUP_GUIDE.md
 ```
 
 ## Next Steps
 
 Once you have the chatbot running:
 
-1. **Experiment with different models** to find the best balance of speed and quality for your use case
-2. **Adjust memory settings** in the `.env` file to control conversation context length
-3. **Explore the code** in the `app/` directory to understand how LangChain integrates with Ollama
-4. **Customize the Streamlit interface** in `main.py` to add new features
-
-## Support
-
-If you encounter issues not covered in this guide:
-
-1. Check the Docker and Streamlit logs for error messages
-2. Ensure all prerequisites are properly installed
-3. Verify that your system meets the hardware requirements for the selected models
-4. Try using a smaller model if you're experiencing memory issues
+1. **Experiment with different models** from the sidebar.
+2. **Adjust memory settings** in a `.env` file to control conversation context length.
+3. **Explore the code** in the `app/` directory to understand the application logic.
+4. **Customize the Streamlit interface** in `main.py` to add new features.
 
 Enjoy your local AI chatbot! 🚀

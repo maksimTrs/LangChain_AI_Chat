@@ -1,11 +1,11 @@
-# AI Chatbot with LangChain + Ollama + Memory
+# AI Chatbot with LangChain + Ollama + Streamlit
 
 A complete AI chatbot solution featuring:
 - 🦜 **LangChain** for conversation management
 - 🦙 **Ollama** for local LLM inference (via Docker)
-- 🧠 **Persistent Memory** for conversation context
-- 🐳 **Docker** for Ollama deployment
-- ⚡ **Streamlit** for beautiful web interface
+- 🧠 **In-memory** for conversation context per session
+- 🐳 **Docker** for easy deployment
+- ⚡ **Streamlit** for a beautiful web interface
 
 ## 🏗️ Project Structure
 
@@ -16,7 +16,10 @@ ai-chatbot/
 │   ├── chatbot.py         # Core chatbot logic
 │   ├── memory_manager.py  # Conversation memory management
 │   └── config.py          # Configuration management
-├── docker-compose.yml     # Ollama Docker service configuration
+├── static/
+│   └── style.css          # Custom CSS for the web interface
+├── Dockerfile              # Dockerfile for the Streamlit application
+├── docker-compose.yml     # Docker services configuration
 ├── requirements.txt      # Python dependencies
 ├── .env.example         # Environment variables template
 ├── .gitignore          # Git ignore rules
@@ -27,164 +30,116 @@ ai-chatbot/
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.9+
 - Docker & Docker Compose
 - Git
 
 ### Setup Instructions
 
-1. **Clone and setup:**
+1. **Clone the repository:**
 ```bash
 git clone <your-repo-url>
 cd ai-chatbot
-cp .env.example .env
 ```
 
-2. **Start Ollama in Docker:**
+2. **Start the services:**
 ```bash
-docker-compose up -d
+docker compose up -d --build
 ```
+This will build the Streamlit application image and start all the services.
 
 3. **Ollama models:**
-```bash
-# Models will be automatically pulled as configured in docker-compose.yml
-# Currently configured models:
-# - qwen3:30b-a3b-q4_K_M
-# - gemma3:12b-it-qat
-```
+The `docker-compose.yml` is configured to automatically pull the default model (`gemma:2b`).
 
-4. **Setup Python virtual environment:**
-```bash
-python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
-```
-
-5. **Install dependencies:**
-```bash
-pip install -r requirements.txt
-```
-
-6. **Configure environment:**
-```bash
-# Edit .env file with your settings
-# Make sure OLLAMA_BASE_URL points to your Docker container
-# Default: OLLAMA_BASE_URL=http://localhost:11434
-
-# Optional: Configure LangSmith for LLM call logging and monitoring
-# LANGSMITH_TRACING=true
-# LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
-# LANGSMITH_API_KEY="your_langsmith_api_key"
-# LANGSMITH_PROJECT="your_project_name"
-```
-
-7. **Run the application:**
-```bash
-streamlit run main.py
-```
-
-8. **Access the chatbot:**
-   - Open http://localhost:8501 in your browser
+4. **Access the chatbot:**
+   - Open http://localhost:8501 in your browser.
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
+You can customize the application by creating a `.env` file in the root of the project.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `llama2` | Model to use |
-| `CHAT_MEMORY_SIZE` | `10` | Number of messages to remember |
-| `STREAMLIT_SERVER_PORT` | `8501` | Web interface port |
-| `LANGSMITH_TRACING` | `false` | Enable LangSmith tracing |
-| `LANGSMITH_ENDPOINT` | `https://api.smith.langchain.com` | LangSmith API endpoint |
-| `LANGSMITH_API_KEY` | - | Your LangSmith API key |
-| `LANGSMITH_PROJECT` | - | LangSmith project name |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL. When running with Docker, this is `http://ollama:11434`. |
+| `OLLAMA_MODEL` | `gemma:2b` | The default model to use. |
+| `OLLAMA_TEMPERATURE` | `0.7` | The temperature for the LLM. |
+| `OLLAMA_TOP_P` | `0.9` | The top_p for the LLM. |
+| `OLLAMA_NUM_PREDICT` | `512` | The number of tokens to predict. |
+| `CHAT_MEMORY_SIZE` | `10` | Number of messages to remember in a session. |
+| `STREAMLIT_SERVER_PORT` | `8501` | Web interface port. |
 
 ### Available Models
 
-Popular Ollama models configured in this project:
-- `qwen3:30b-a3b-q4_K_M` - Qwen 3 30B model (quantized)
-- `gemma3:12b-it-qat` - Gemma 3 12B instruction-tuned model (quantized)
-
-You can add more models by updating the docker-compose.yml file.
-- `mistral` - Fast and efficient
-- `neural-chat` - Conversational AI
-
-To switch models:
-```bash
-docker exec -it ollama-server ollama pull <model-name>
-# Update OLLAMA_MODEL in .env
-# Restart the Streamlit application locally
-```
-
-## 📊 LangSmith Integration
-
-This project supports [LangSmith](https://smith.langchain.com/) for comprehensive LLM call logging, monitoring, and debugging.
-
-### Features
-- **Call Logging**: Automatically logs all LLM interactions
-- **Performance Monitoring**: Track response times and token usage
-- **Debugging**: Detailed traces of conversation flows
-- **Analytics**: Aggregate statistics and insights
-
-### Setup LangSmith
-
-1. **Create LangSmith Account**:
-   - Visit [https://smith.langchain.com/](https://smith.langchain.com/)
-   - Sign up for a free account
-
-2. **Get API Key**:
-   - Navigate to your LangSmith dashboard
-   - Generate an API key from the settings
-
-3. **Configure Environment**:
-   ```bash
-   # Add to your .env file
-   LANGSMITH_TRACING=true
-   LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
-   LANGSMITH_API_KEY="your_api_key_here"
-   LANGSMITH_PROJECT="ai-test"
-   ```
-
-4. **Load Environment Variables**:
-   ```python
-   from app.env_loader import load_environment
-   
-   # Load environment variables including LangSmith config
-   load_environment()
-   ```
-
-5. **Verify Integration**:
-   - Start your chatbot application
-   - Send a few messages
-   - Check your LangSmith dashboard for logged interactions
-
-### LangSmith Dashboard
-
-Once configured, you'll see:
-- **Traces**: Detailed conversation flows
-- **Runs**: Individual LLM calls with inputs/outputs
-- **Metrics**: Performance statistics
-- **Projects**: Organized by your project name
+The default model is `gemma:2b`. You can change the model by setting the `OLLAMA_MODEL` environment variable. Make sure the model is available in your Ollama instance. You can add more models to be pulled at startup by editing the `command` in the `ollama-pull-models` service in `docker-compose.yml`.
 
 ## 🧠 Memory Management
 
-The chatbot features sophisticated memory management:
+The chatbot uses Streamlit's session state to manage conversation history.
+- **Session-based Memory**: Each user session has its own independent conversation history.
+- **In-memory**: The history is stored in memory and is not persisted across application restarts.
+- **Configurable Size**: The number of messages to remember is configurable via the `CHAT_MEMORY_SIZE` environment variable.
 
-- **Conversation Buffer**: Keeps last N messages in memory
-- **Persistent Storage**: Saves chat history to JSON files
-- **Session Management**: Separate conversations per session
-- **Memory Summary**: View conversation statistics
+## 🐳 Docker Services
 
-### Memory Files
-- Location: `./data/` (Docker) or project root (local)
-- Format: `chat_history_{session_id}.json`
-- Auto-saved after each interaction
+### Ollama Service
+- **Image**: `ollama/ollama:latest`
+- **Port**: `11434`
+- **Volume**: Persistent model storage.
+- **Health Check**: Ensures the service is running before the app starts.
+
+### App Service
+- **Build**: From the `Dockerfile` in the root directory.
+- **Port**: `8501`
+- **Dependencies**: Depends on the `ollama` and `ollama-pull-models` services.
+
+### Ollama Pull Models Service
+- **Image**: `ollama/ollama:latest`
+- **Function**: Pulls the default Ollama model at startup.
+
+## 🛠️ Development
+
+### Project Architecture
+
+```
+┌─────────────────┐    ┌──────────────────┐    ┌────────────────┐
+│   Streamlit     │    │    LangChain     │    │     Ollama     │
+│  (Frontend)     │◄──►│ (Orchestration)  │◄──►│  (LLM Server)  │
+└─────────────────┘    └──────────────────┘    └────────────────┘
+         │                      │                      │
+         ▼                      ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐    ┌────────────────┐
+│     main.py     │    │   chatbot.py    │    │  Local Models  │
+│    (UI Logic)   │    │  (Chat Logic)   │    │  (gemma:2b, etc.)│
+└─────────────────┘    └─────────────────┘    └────────────────┘
+         │                      │
+         ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐
+│  Session State  │    │ Memory Manager  │
+│ (In-memory per  │    │ (Manages memory │
+│     session)    │    │   for LangChain)│
+└─────────────────┘    └─────────────────┘
+```
+
+### Key Components
+
+1. **OllamaChatbot** (`app/chatbot.py`)
+   - Core chatbot logic.
+   - Integrates with LangChain and Ollama.
+   - Manages model switching.
+
+2. **ChatMemoryManager** (`app/memory_manager.py`)
+   - Manages the conversation buffer for LangChain.
+
+3. **Config** (`app/config.py`)
+   - Handles application configuration from environment variables.
+   - Validates the configuration at startup.
+
+4. **Streamlit Interface** (`main.py`)
+   - Renders the web UI.
+   - Manages user sessions and chat history.
+   - Handles user input and displays the chatbot's response.
 
 ## 🎛️ Web Interface Features
 
@@ -193,70 +148,6 @@ The chatbot features sophisticated memory management:
 - **Model Information**: View current model and settings
 - **Conversation Summary**: Statistics and message count
 - **Responsive Design**: Works on desktop and mobile
-
-## 🐳 Docker Services
-
-### Ollama Service
-- **Image**: `ollama/ollama:latest`
-- **Port**: `11434`
-- **Volume**: Persistent model storage
-- **Health Check**: API endpoint monitoring
-
-### Local Python Application
-- **Port**: `8501` (Streamlit)
-- **Dependencies**: Connects to Ollama Docker service
-- **Storage**: Local file system for chat history
-
-## 🛠️ Development
-
-### Project Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Streamlit     │    │   LangChain     │    │     Ollama      │
-│  (Frontend)     │◄──►│  (Orchestration)│◄──►│   (LLM Server)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│  main.py        │    │  chatbot.py     │    │  Local Models   │
-│  (UI Logic)     │    │  (Chat Logic)   │    │  (llama2, etc.) │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │
-         ▼                       ▼
-┌─────────────────┐    ┌─────────────────┐
-│  Session State  │    │ Memory Manager  │
-│  (Temp Storage) │    │ (Persistent)    │
-└─────────────────┘    └─────────────────┘
-```
-
-### Key Components
-
-1. **OllamaChatbot** (`app/chatbot.py`)
-   - Main chatbot logic
-   - LangChain integration
-   - Model management
-
-2. **ChatMemoryManager** (`app/memory_manager.py`)
-   - Conversation persistence
-   - Memory buffer management
-   - Session handling
-
-3. **Config** (`app/config.py`)
-   - Environment configuration
-   - Validation logic
-
-4. **Streamlit Interface** (`main.py`)
-   - Web UI components
-   - User interaction handling
-   - Real-time updates
-
-### Adding New Features
-
-1. **Custom Prompts**: Modify the system prompt in `chatbot.py`
-2. **New Models**: Add model configurations in `config.py`
-3. **UI Components**: Extend the Streamlit interface in `main.py`
-4. **Memory Types**: Implement new memory strategies in `memory_manager.py`
 
 ## 🔍 Troubleshooting
 

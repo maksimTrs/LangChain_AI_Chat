@@ -1,4 +1,4 @@
-from langchain_ollama import OllamaLLM
+from langchain_ollama.llms import OllamaLLM
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain.schema.runnable import RunnablePassthrough
 from langchain.schema.output_parser import StrOutputParser
@@ -6,17 +6,15 @@ from app.memory_manager import ChatMemoryManager
 from app.config import Config
 import requests
 import time
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, AsyncGenerator
 
 class OllamaChatbot:
     """Main chatbot class with LangChain and Ollama integration"""
     
-    def __init__(self, session_id: str = "default"):
+    def __init__(self):
         self.config = Config()
-        self.session_id = session_id
         self.memory_manager = ChatMemoryManager(
-            memory_size=self.config.CHAT_MEMORY_SIZE,
-            session_id=session_id
+            memory_size=self.config.CHAT_MEMORY_SIZE
         )
         
         # Initialize Ollama LLM
@@ -34,9 +32,9 @@ class OllamaChatbot:
             self.llm = OllamaLLM(
                 base_url=self.config.OLLAMA_BASE_URL,
                 model=self.config.OLLAMA_MODEL,
-                temperature=0.7,
-                top_p=0.9,
-                num_predict=512
+                temperature=self.config.OLLAMA_TEMPERATURE,
+                top_p=self.config.OLLAMA_TOP_P,
+                num_predict=self.config.OLLAMA_NUM_PREDICT
             )
             
             # Create conversation prompt template
@@ -82,24 +80,24 @@ class OllamaChatbot:
         
         raise ConnectionError("Could not connect to Ollama service")
     
-    def chat(self, message: str) -> str:
-        """Send a message and get response"""
+    async def chat(self, message: str) -> AsyncGenerator[str, None]:
+        """Send a message and stream the response"""
         if not self.chain:
             raise RuntimeError("Chatbot not properly initialized")
         
+        full_response = ""
         try:
-            # Get response from the chain
-            response = self.chain.invoke({"input": message})
+            async for chunk in self.chain.astream({"input": message}):
+                yield chunk
+                full_response += chunk
             
-            # Add to memory
-            self.memory_manager.add_message(message, response)
-            
-            return response
+            # Add to memory after streaming is complete
+            self.memory_manager.add_message(message, full_response)
             
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
             print(f"❌ {error_msg}")
-            return f"I apologize, but I encountered an error: {error_msg}"
+            yield f"I apologize, but I encountered an error: {error_msg}"
     
     def get_available_models(self) -> list:
         """Get list of available Ollama models"""
@@ -138,9 +136,7 @@ class OllamaChatbot:
         formatted_history = []
         
         for msg in messages:
-            formatted_history.append({
-                "role": "user" if msg.__class__.__name__ == "HumanMessage" else "assistant",
-                "content": msg.content
-            })
+            role = "user" if msg.type == "human" else "assistant"
+            formatted_history.append({"role": role, "content": msg.content})
         
         return formatted_history
