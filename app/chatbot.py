@@ -51,7 +51,7 @@ class OllamaChatbot:
             # Create the conversation chain
             self.chain = (
                 RunnablePassthrough.assign(
-                    chat_history=lambda x: []
+                    chat_history=lambda x: x.get("chat_history", [])
                 )
                 | prompt
                 | self.llm
