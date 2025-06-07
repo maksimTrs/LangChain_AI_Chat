@@ -20,6 +20,14 @@ class OllamaChatbot:
             memory_size=self.config.CHAT_MEMORY_SIZE
         )
         
+        # Initialize system prompt and role
+        self.current_role = "Beginner"
+        self.system_prompts = {
+            "Beginner": "You are a helpful AI assistant. Provide clear, simple explanations suitable for beginners. Use easy-to-understand language and avoid technical jargon. Break down complex concepts into digestible parts.",
+            "Expert": "You are an expert AI assistant. Provide detailed, technical responses with in-depth analysis. Use professional terminology and include relevant technical details, best practices, and advanced concepts.",
+            "PhD": "You are a highly specialized AI assistant with PhD-level expertise. Provide comprehensive, research-oriented responses with theoretical depth, citations when relevant, cutting-edge insights, and advanced analytical perspectives."
+        }
+        
         # Initialize Ollama LLM
         self.llm = None
         self.chain = None
@@ -40,10 +48,11 @@ class OllamaChatbot:
                 num_predict=self.config.OLLAMA_NUM_PREDICT
             )
             
-            # Create conversation prompt template
+            # Create conversation prompt template with dynamic system prompt
+            system_message = f"{self.system_prompts[self.current_role]} You have access to the conversation history. Provide helpful, accurate, and contextual responses based on the conversation context."
+            
             prompt = ChatPromptTemplate.from_messages([
-                ("system", "You are a helpful AI assistant. You have access to the conversation history. "
-                          "Provide helpful, accurate, and contextual responses based on the conversation context."),
+                ("system", system_message),
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("human", "{input}")
             ])
@@ -133,6 +142,21 @@ class OllamaChatbot:
             return True
         except Exception as e:
             print(f"Error switching model: {e}")
+            return False
+    
+    def update_system_prompt(self, role: str) -> bool:
+        """Update the system prompt based on the selected role"""
+        try:
+            if role in self.system_prompts:
+                self.current_role = role
+                self._initialize_llm()  # Reinitialize with new prompt
+                print(f"✅ Updated system prompt for {role} level responses")
+                return True
+            else:
+                print(f"❌ Invalid role: {role}")
+                return False
+        except Exception as e:
+            print(f"Error updating system prompt: {e}")
             return False
     
     async def clear_conversation_async(self):

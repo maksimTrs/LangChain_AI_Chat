@@ -34,15 +34,20 @@ def init_session_state():
         st.session_state.chatbot = None
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "user_id" not in st.session_state:
+        st.session_state.user_id = "User"
+    if "selected_role" not in st.session_state:
+        st.session_state.selected_role = "Beginner"
 
 init_session_state()
 
 # --- Chatbot Initialization ---
 @st.cache_resource
-def get_chatbot(_session_id):
+def get_chatbot(_user_id, _role):
     """Initialize and cache the chatbot instance"""
     try:
-        chatbot = OllamaChatbot(session_id=_session_id)
+        chatbot = OllamaChatbot(session_id=_user_id)
+        chatbot.update_system_prompt(_role)
         return chatbot
     except Exception as e:
         st.error(f"❌ Failed to initialize chatbot: {str(e)}")
@@ -54,6 +59,46 @@ def render_sidebar(chatbot):
     """Render the sidebar UI components"""
     with st.sidebar:
         st.header("🛠️ Configuration")
+        
+        # User identification
+        st.subheader("👤 User Settings")
+        if "user_id" not in st.session_state:
+            st.session_state.user_id = "User"
+        
+        user_id = st.text_input(
+            "Enter your name:",
+            value=st.session_state.user_id,
+            key="user_id_input",
+            help="Your name for session identification"
+        )
+        
+        if user_id != st.session_state.user_id:
+            st.session_state.user_id = user_id
+            # Clear cache to reinitialize chatbot with new user
+            st.cache_resource.clear()
+            st.rerun()
+        
+        # Role selection for system prompt
+        st.subheader("🎯 Response Style")
+        role_options = ["Beginner", "Expert", "PhD"]
+        if "selected_role" not in st.session_state:
+            st.session_state.selected_role = "Beginner"
+        
+        selected_role = st.radio(
+            "How detailed should the answers be?",
+            role_options,
+            index=role_options.index(st.session_state.selected_role),
+            key="role_selector",
+            help="Choose the complexity level of responses"
+        )
+        
+        if selected_role != st.session_state.selected_role:
+            st.session_state.selected_role = selected_role
+            # Clear cache to reinitialize chatbot with new role
+            st.cache_resource.clear()
+            st.rerun()
+        
+        st.markdown("---")
         
         # Model selection
         st.subheader("🤖 Model Selection")
@@ -89,6 +134,7 @@ def render_sidebar(chatbot):
         # Model information
         st.write(f"**Current Model:** {chatbot.config.OLLAMA_MODEL}")
         st.write(f"**Memory Size:** {chatbot.config.CHAT_MEMORY_SIZE} messages")
+        st.write(f"**Response Level:** {st.session_state.selected_role}")
         
         with st.expander("📊 Conversation Summary"):
             st.json(chatbot.get_conversation_summary())
@@ -157,8 +203,8 @@ def main():
     """Main Streamlit application"""
     st.markdown('<h1 class="main-header">🤖 AI Chatbot with Ollama & LangChain</h1>', unsafe_allow_html=True)
     
-    # Get chatbot with session ID
-    chatbot = get_chatbot(st.session_state.session_id)
+    # Get chatbot with user ID and role
+    chatbot = get_chatbot(st.session_state.user_id, st.session_state.selected_role)
     
     if "messages" not in st.session_state or not st.session_state.messages:
         st.session_state.messages = chatbot.get_chat_history()
