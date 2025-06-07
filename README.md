@@ -3,7 +3,8 @@
 A complete AI chatbot solution featuring:
 - 🦜 **LangChain** for conversation management
 - 🦙 **Ollama** for local LLM inference (via Docker)
-- 🧠 **In-memory** for conversation context per session
+- 🗄️ **SQLite Database** for persistent conversation storage
+- 🧠 **Memory Management** for conversation context per session
 - 🐳 **Docker** for easy deployment
 - ⚡ **Streamlit** for a beautiful web interface
 
@@ -16,6 +17,8 @@ LangChain_AI_Chat/
 │   ├── chatbot.py
 │   ├── memory_manager.py
 │   └── config.py
+├── data/
+│   └── chathistory.db          # SQLite database (auto-created)
 ├── static/
 │   └── style.css
 ├── .gitignore
@@ -23,6 +26,7 @@ LangChain_AI_Chat/
 ├── Dockerfile
 ├── main.py
 ├── README.md
+├── requirements.txt
 └── SETUP_GUIDE.md
 ```
 
@@ -67,6 +71,8 @@ You can customize the application by creating a `.env` file in the root of the p
 | `OLLAMA_TOP_P` | `0.9` | The top_p for the LLM. |
 | `OLLAMA_NUM_PREDICT` | `512` | The number of tokens to predict. |
 | `CHAT_MEMORY_SIZE` | `10` | Number of messages to remember in a session. |
+| `DATABASE_URL` | `sqlite+aiosqlite:///data/chathistory.db` | SQLite database connection string. |
+| `DATABASE_TABLE_NAME` | `message_store` | Database table name for storing messages. |
 | `STREAMLIT_SERVER_PORT` | `8501` | Web interface port. |
 
 ### Available Models
@@ -75,10 +81,19 @@ The default model is `gemma:2b`. You can change the model by setting the `OLLAMA
 
 ## 🧠 Memory Management
 
-The chatbot uses Streamlit's session state to manage conversation history.
+The chatbot uses a dual-layer memory system for optimal performance:
 - **Session-based Memory**: Each user session has its own independent conversation history.
-- **In-memory**: The history is stored in memory and is not persisted across application restarts.
+- **SQLite Database**: Conversations are persistently stored in `data/chathistory.db` and survive application restarts.
 - **Configurable Size**: The number of messages to remember is configurable via the `CHAT_MEMORY_SIZE` environment variable.
+- **Automatic Creation**: The database file is automatically created when you start your first conversation.
+
+### Database Persistence
+
+The SQLite database is mapped to your host machine via Docker volumes:
+- **Location**: `./data/chathistory.db` on your host machine
+- **Table**: `message_store` (configurable via `DATABASE_TABLE_NAME`)
+- **Schema**: Stores session IDs, message content, timestamps, and metadata
+- **Backup**: You can backup conversations by copying the `data/chathistory.db` file
 
 ## 🐳 Docker Services
 
@@ -91,6 +106,7 @@ The chatbot uses Streamlit's session state to manage conversation history.
 ### App Service (`app`)
 - **Build**: From the `Dockerfile` in the root directory.
 - **Port**: `8501`
+- **Volume**: `./data:/app/data` for database persistence
 - **Dependencies**: Waits for the `ollama-pull-models` service to complete successfully.
 
 ### Ollama Pull Models Service (`ollama-pull-models`)
@@ -112,13 +128,13 @@ The chatbot uses Streamlit's session state to manage conversation history.
 │     main.py     │    │   chatbot.py    │    │  Local Models  │
 │    (UI Logic)   │    │  (Chat Logic)   │    │  (gemma:2b, etc.)│
 └─────────────────┘    └─────────────────┘    └────────────────┘
-         │                      │
-         ▼                      ▼
-┌─────────────────┐    ┌─────────────────┐
-│  Session State  │    │ Memory Manager  │
-│ (In-memory per  │    │ (Manages memory │
-│     session)    │    │   for LangChain)│
-└─────────────────┘    └─────────────────┘
+         │                      │                      │
+         ▼                      ▼                      ▼
+┌─────────────────┐    ┌─────────────────┐    ┌────────────────┐
+│  Session State  │    │ Memory Manager  │    │ SQLite Database│
+│ (In-memory per  │    │ (Manages memory │    │ (Persistent    │
+│     session)    │    │   for LangChain)│    │   Storage)     │
+└─────────────────┘    └─────────────────┘    └────────────────┘
 ```
 
 ### Key Components
@@ -130,6 +146,8 @@ The chatbot uses Streamlit's session state to manage conversation history.
 
 2. **ChatMemoryManager** (`app/memory_manager.py`)
    - Manages the conversation buffer for LangChain.
+   - Handles SQLite database operations for persistent storage.
+   - Manages async/sync compatibility for database operations.
 
 3. **Config** (`app/config.py`)
    - Handles application configuration from environment variables.
@@ -185,6 +203,31 @@ The chatbot uses Streamlit's session state to manage conversation history.
    netstat -aon | findstr ":11434"
    
    # Modify ports in docker-compose.yml if needed
+   ```
+
+4. **Database Issues**
+   ```bash
+   # Check if database file exists
+   ls -la data/chathistory.db
+   
+   # Check database permissions (Linux/Mac)
+   ls -la data/
+   
+   # Reset database (removes all conversation history)
+   rm data/chathistory.db
+   docker-compose restart streamlit-app
+   
+   # Check database content (requires sqlite3)
+   sqlite3 data/chathistory.db "SELECT * FROM message_store LIMIT 5;"
+   ```
+
+5. **Memory/Context Issues**
+   ```bash
+   # Clear conversation via web interface
+   # Click "🗑️ Clear Conversation" button
+   
+   # Or restart the application
+   docker-compose restart streamlit-app
    ```
 
 ### Logs and Debugging
