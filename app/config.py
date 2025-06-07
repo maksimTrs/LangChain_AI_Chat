@@ -18,7 +18,7 @@ class Config:
     CHAT_MEMORY_SIZE = int(os.getenv('CHAT_MEMORY_SIZE', 10))
     
     # Database settings
-    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///chathistory.db')
+    DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///data/chathistory.db')
     DATABASE_TABLE_NAME = os.getenv('DATABASE_TABLE_NAME', 'message_store')
     
     # Streamlit settings

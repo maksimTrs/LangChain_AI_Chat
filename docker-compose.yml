@@ -28,6 +28,8 @@ services:
     restart: unless-stopped
     ports:
       - "8501:8501"
+    volumes:
+      - ./data:/app/data
     environment:
       - OLLAMA_BASE_URL=http://ollama-app:11434
     depends_on:
