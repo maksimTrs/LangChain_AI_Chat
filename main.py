@@ -3,6 +3,10 @@ from app.chatbot import OllamaChatbot
 from app.config import Config
 import asyncio
 import uuid
+import nest_asyncio
+
+# Apply nest_asyncio to allow nested event loops
+nest_asyncio.apply()
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -35,10 +39,10 @@ init_session_state()
 
 # --- Chatbot Initialization ---
 @st.cache_resource
-def get_chatbot():
+def get_chatbot(_session_id):
     """Initialize and cache the chatbot instance"""
     try:
-        chatbot = OllamaChatbot()
+        chatbot = OllamaChatbot(session_id=_session_id)
         return chatbot
     except Exception as e:
         st.error(f"❌ Failed to initialize chatbot: {str(e)}")
@@ -107,7 +111,7 @@ def render_chat_history():
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-async def handle_chat_input(chatbot):
+def handle_chat_input(chatbot):
     """Handle user chat input and generate response"""
     if prompt := st.chat_input("Type your message here..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -118,9 +122,31 @@ async def handle_chat_input(chatbot):
             message_placeholder = st.empty()
             full_response = ""
             try:
-                async for chunk in chatbot.chat(prompt):
-                    full_response += chunk
-                    message_placeholder.markdown(full_response + "▌")
+                # Use asyncio.run with nest_asyncio support
+                async def stream_response():
+                    nonlocal full_response
+                    async for chunk in chatbot.chat(prompt):
+                        full_response += chunk
+                        message_placeholder.markdown(full_response + "▌")
+                    return full_response
+                
+                # Run the async function
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Use nest_asyncio to handle nested loops
+                        import nest_asyncio
+                        nest_asyncio.apply()
+                        full_response = asyncio.run(stream_response())
+                    else:
+                        full_response = asyncio.run(stream_response())
+                except RuntimeError:
+                    # Fallback: create new event loop
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    full_response = loop.run_until_complete(stream_response())
+                    loop.close()
+                
                 message_placeholder.markdown(full_response)
                 st.session_state.messages.append({"role": "assistant", "content": full_response})
             except Exception as e:
@@ -131,7 +157,8 @@ def main():
     """Main Streamlit application"""
     st.markdown('<h1 class="main-header">🤖 AI Chatbot with Ollama & LangChain</h1>', unsafe_allow_html=True)
     
-    chatbot = get_chatbot()
+    # Get chatbot with session ID
+    chatbot = get_chatbot(st.session_state.session_id)
     
     if "messages" not in st.session_state or not st.session_state.messages:
         st.session_state.messages = chatbot.get_chat_history()
@@ -139,14 +166,14 @@ def main():
     render_sidebar(chatbot)
     render_chat_history()
     
-    # Run async chat handler
-    asyncio.run(handle_chat_input(chatbot))
+    # Handle chat input (now synchronous)
+    handle_chat_input(chatbot)
     
     # Footer
     st.markdown("---")
     st.markdown(
         "<div style='text-align: center; color: #666;'>" 
-        "Powered by LangChain 🦜🔗 + Ollama 🦙 + Streamlit ⚡" 
+        "Powered by LangChain 🦜🔗 + Ollama 🦙 + Streamlit ⚡ + SQLite 🗄️" 
         "</div>", 
         unsafe_allow_html=True
     )

@@ -49,3 +49,4 @@ services:
         #OLLAMA_HOST=ollama-app:11434 ollama pull qwen3:30b-a3b-q4_K_M
         #OLLAMA_HOST=ollama-app:11434 ollama pull gemma3:12b-it-qat
         OLLAMA_HOST=ollama-app:11434 ollama pull gemma:2b
+        OLLAMA_HOST=ollama-app:11434 ollama pull llama3.2:1b

@@ -6,14 +6,17 @@ from app.memory_manager import ChatMemoryManager
 from app.config import Config
 import requests
 import time
+import asyncio
 from typing import Optional, Dict, Any, AsyncGenerator
 
 class OllamaChatbot:
     """Main chatbot class with LangChain and Ollama integration"""
     
-    def __init__(self):
+    def __init__(self, session_id: str = None):
         self.config = Config()
+        self.session_id = session_id or "default_session"
         self.memory_manager = ChatMemoryManager(
+            session_id=self.session_id,
             memory_size=self.config.CHAT_MEMORY_SIZE
         )
         
@@ -48,7 +51,7 @@ class OllamaChatbot:
             # Create the conversation chain
             self.chain = (
                 RunnablePassthrough.assign(
-                    chat_history=lambda x: self.memory_manager.get_memory_variables()["chat_history"]
+                    chat_history=lambda x: []
                 )
                 | prompt
                 | self.llm
@@ -85,19 +88,30 @@ class OllamaChatbot:
         if not self.chain:
             raise RuntimeError("Chatbot not properly initialized")
         
-        full_response = ""
         try:
-            async for chunk in self.chain.astream({"input": message}):
-                yield chunk
-                full_response += chunk
+            # Add user message to memory (async)
+            await self.memory_manager.add_message_async("user", message)
             
-            # Add to memory after streaming is complete
-            self.memory_manager.add_message(message, full_response)
+            # Get chat history asynchronously
+            chat_history = await self.memory_manager.sql_history.aget_messages()
+            
+            # Get response from chain with chat history
+            response = ""
+            async for chunk in self.chain.astream({"input": message, "chat_history": chat_history}):
+                if isinstance(chunk, str):
+                    response += chunk
+                    yield chunk
+                elif isinstance(chunk, dict) and "answer" in chunk:
+                    response += chunk["answer"]
+                    yield chunk["answer"]
+            
+            # Add AI response to memory (async)
+            await self.memory_manager.add_message_async("ai", response)
             
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
-            print(f"❌ {error_msg}")
-            yield f"I apologize, but I encountered an error: {error_msg}"
+            yield error_msg
+            raise Exception(error_msg)
     
     def get_available_models(self) -> list:
         """Get list of available Ollama models"""
@@ -121,22 +135,45 @@ class OllamaChatbot:
             print(f"Error switching model: {e}")
             return False
     
-    def clear_conversation(self) -> None:
-        """Clear conversation history"""
-        self.memory_manager.clear_memory()
-        print("🗑️ Conversation history cleared")
-    
-    def get_conversation_summary(self) -> Dict[str, Any]:
-        """Get summary of current conversation"""
+    async def clear_conversation_async(self):
+        """Clear conversation history (async)"""
+        await self.memory_manager.clear_conversation_async()
+        print("🧹 Conversation history cleared")
+        
+    def clear_conversation(self):
+        """Clear conversation history (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Create a task instead of using run_until_complete
+                asyncio.create_task(self.clear_conversation_async())
+            else:
+                asyncio.run(self.clear_conversation_async())
+        except Exception as e:
+            print(f"Error clearing conversation: {e}")
+            # Fallback to sync method
+            self.memory_manager.clear_memory()
+        print("🧹 Conversation history cleared")
+        
+    def get_conversation_summary(self) -> str:
+        """Get a summary of the current conversation"""
         return self.memory_manager.get_memory_summary()
-    
+        
+    async def get_chat_history_async(self) -> list:
+        """Get formatted chat history for Streamlit (async)"""
+        return await self.memory_manager.get_chat_history_async()
+        
     def get_chat_history(self) -> list:
-        """Get formatted chat history for display"""
-        messages = self.memory_manager.get_chat_history()
-        formatted_history = []
-        
-        for msg in messages:
-            role = "user" if msg.type == "human" else "assistant"
-            formatted_history.append({"role": role, "content": msg.content})
-        
-        return formatted_history
+        """Get formatted chat history for Streamlit (sync wrapper)"""
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Use nest_asyncio to handle nested loops
+                import nest_asyncio
+                nest_asyncio.apply()
+                return asyncio.run(self.get_chat_history_async())
+            else:
+                return asyncio.run(self.get_chat_history_async())
+        except RuntimeError:
+            # Fallback to sync method
+            return self.memory_manager.get_chat_history()
