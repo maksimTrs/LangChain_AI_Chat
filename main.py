@@ -66,10 +66,10 @@ def render_sidebar(chatbot):
             st.session_state.user_id = "User"
         
         user_id = st.text_input(
-            "Enter your name:",
+            "Enter name/sessionId:",
             value=st.session_state.user_id,
             key="user_id_input",
-            help="Your name for session identification"
+            help="Your name or session ID for conversation identification"
         )
         
         if user_id != st.session_state.user_id:
