@@ -106,21 +106,39 @@ class OllamaChatbot:
             
             # Get response from chain with chat history
             response = ""
-            async for chunk in self.chain.astream({"input": message, "chat_history": chat_history}):
-                if isinstance(chunk, str):
-                    response += chunk
-                    yield chunk
-                elif isinstance(chunk, dict) and "answer" in chunk:
-                    response += chunk["answer"]
-                    yield chunk["answer"]
+            try:
+                async for chunk in self.chain.astream({"input": message, "chat_history": chat_history}):
+                    if isinstance(chunk, str):
+                        response += chunk
+                        yield chunk
+                    elif isinstance(chunk, dict) and "answer" in chunk:
+                        response += chunk["answer"]
+                        yield chunk["answer"]
+            except ConnectionError as e:
+                error_msg = f"Connection error - check if Ollama is running: {str(e)}"
+                yield error_msg
+                raise ConnectionError(error_msg)
+            except TimeoutError as e:
+                error_msg = f"Request timeout - try again or use a smaller model: {str(e)}"
+                yield error_msg
+                raise TimeoutError(error_msg)
+            except ValueError as e:
+                error_msg = f"Invalid input or model configuration: {str(e)}"
+                yield error_msg
+                raise ValueError(error_msg)
             
             # Add AI response to memory (async)
-            await self.memory_manager.add_message_async("ai", response)
+            if response:  # Only add if we got a response
+                await self.memory_manager.add_message_async("ai", response)
             
+        except (ConnectionError, TimeoutError, ValueError):
+            # Re-raise specific exceptions we've already handled
+            raise
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
+            # Catch any remaining unexpected errors
+            error_msg = f"Unexpected error generating response: {str(e)}"
             yield error_msg
-            raise Exception(error_msg)
+            raise RuntimeError(error_msg)
     
     def get_available_models(self) -> list:
         """Get list of available Ollama models"""

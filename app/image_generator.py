@@ -55,8 +55,9 @@ class ImageGenerator:
                 )
                 # Enable memory efficient attention for lower VRAM usage
                 _self.pipeline.enable_attention_slicing()
-                _self.pipeline.enable_model_cpu_offload()  # Offload unused parts to CPU automatically
-                # Note: CPU offloading handles GPU placement automatically, no manual .to() needed
+                # Use model CPU offload to automatically manage GPU memory
+                # This handles device placement automatically, so no manual .to() calls needed
+                _self.pipeline.enable_model_cpu_offload()
             else:
                 _self.pipeline = StableDiffusionPipeline.from_pretrained(
                     _self.config.IMAGE_MODEL,
@@ -64,8 +65,9 @@ class ImageGenerator:
                     safety_checker=None,
                     requires_safety_checker=False
                 )
-                # For CPU, we need to explicitly move the pipeline
+                # For CPU-only, explicitly move the pipeline
                 _self.pipeline = _self.pipeline.to(_self.device)
+                
             _self.model_loaded = True
             
             print(f"✅ Image model loaded successfully on {_self.device}")
@@ -73,6 +75,7 @@ class ImageGenerator:
             
         except Exception as e:
             print(f"❌ Failed to load image model: {str(e)}")
+            _self.model_loaded = False
             return False
     
     def generate_image(
@@ -175,4 +178,34 @@ class ImageGenerator:
         """Clear GPU memory if using CUDA"""
         if self.device == "cuda" and torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print("🧹 GPU memory cleared") 
+            print("🧹 GPU memory cleared")
+    
+    def unload_model(self) -> bool:
+        """Properly unload the model and clear memory"""
+        try:
+            if self.model_loaded and self.pipeline is not None:
+                # Clear the pipeline
+                del self.pipeline
+                self.pipeline = None
+                self.model_loaded = False
+                
+                # Clear GPU memory
+                self.clear_memory()
+                
+                # Clear Streamlit cache
+                if hasattr(st, 'cache_resource'):
+                    st.cache_resource.clear()
+                
+                print("🧹 Image model unloaded successfully")
+                return True
+            return True
+        except Exception as e:
+            print(f"❌ Error unloading model: {str(e)}")
+            return False
+    
+    def __del__(self):
+        """Cleanup when object is destroyed"""
+        try:
+            self.unload_model()
+        except:
+            pass  # Ignore errors during cleanup 

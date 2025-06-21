@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.config import Config
 from typing import List, Dict, Any
 import asyncio
+import concurrent.futures
 
 class ChatMemoryManager:
     """Manages conversation memory with database persistence"""
@@ -32,6 +33,9 @@ class ChatMemoryManager:
             memory_key="chat_history",
             chat_memory=self.sql_history
         )
+        
+        # Create thread pool for handling sync-to-async bridges
+        self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
     
     async def add_message_async(self, message_type: str, content: str):
         """Add a message to the chat history asynchronously."""
@@ -45,19 +49,20 @@ class ChatMemoryManager:
             print(f"Error adding message to memory: {e}")
     
     def add_message(self, message_type: str, content: str) -> None:
-        """Add a message to memory (sync version)"""
+        """Add a message to memory (sync version with proper async handling)"""
         try:
-            # Try to get the current event loop
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # If loop is running, create a task
-                asyncio.create_task(self.add_message_async(message_type, content))
-            else:
-                # If no loop is running, run until complete
-                loop.run_until_complete(self.add_message_async(message_type, content))
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, schedule the task properly
+                task = asyncio.create_task(self.add_message_async(message_type, content))
+                # Don't wait for completion to avoid blocking
+                return
+            except RuntimeError:
+                # No running loop, we can safely run async code
+                asyncio.run(self.add_message_async(message_type, content))
         except Exception as e:
             print(f"Error adding message: {e}")
-            # Don't use sync fallback methods as they conflict with async mode
     
     def get_memory_variables(self) -> Dict[str, Any]:
         """Get memory variables for LangChain"""
@@ -83,16 +88,18 @@ class ChatMemoryManager:
             return []
     
     def get_chat_history(self) -> List[dict]:
-        """Get formatted chat history for Streamlit"""
+        """Get formatted chat history for Streamlit with proper async handling"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a task to get history asynchronously
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, run in executor to avoid blocking
                 import nest_asyncio
                 nest_asyncio.apply()
                 return asyncio.run(self.get_chat_history_async())
-            else:
-                return loop.run_until_complete(self.get_chat_history_async())
+            except RuntimeError:
+                # No running loop, we can safely run async code
+                return asyncio.run(self.get_chat_history_async())
         except Exception as e:
             print(f"Error getting chat history, returning empty list: {e}")
             return []
@@ -105,16 +112,18 @@ class ChatMemoryManager:
             print(f"Error clearing conversation: {e}")
     
     def clear_memory(self) -> None:
-        """Clear all conversation memory"""
+        """Clear all conversation memory with proper async handling"""
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
+            # Check if we're in an async context
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context, schedule the task
                 asyncio.create_task(self.clear_conversation_async())
-            else:
-                loop.run_until_complete(self.clear_conversation_async())
+            except RuntimeError:
+                # No running loop, we can safely run async code
+                asyncio.run(self.clear_conversation_async())
         except Exception as e:
             print(f"Error clearing memory: {e}")
-            # Don't use sync fallback methods as they conflict with async mode
     
     def get_memory_summary(self) -> Dict[str, Any]:
         """Get summary of current memory state"""
@@ -125,3 +134,8 @@ class ChatMemoryManager:
             "has_conversation": len(messages) > 0,
             "session_id": self.session_id
         }
+    
+    def __del__(self):
+        """Cleanup thread pool on destruction"""
+        if hasattr(self, '_executor'):
+            self._executor.shutdown(wait=False)

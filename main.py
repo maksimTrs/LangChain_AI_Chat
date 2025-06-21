@@ -7,6 +7,8 @@ import uuid
 import nest_asyncio
 import re
 import time
+import os
+from PIL import Image
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -185,6 +187,21 @@ def render_sidebar(chatbot, image_generator):
             if image_generator.config.IMAGE_AUTO_LOAD:
                 st.caption("🚀 Auto-load enabled - model loads on startup")
             
+            # Model management buttons
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🗑️ Unload Model", type="secondary"):
+                    if image_generator.unload_model():
+                        st.success("✅ Model unloaded!")
+                        st.rerun()
+                    else:
+                        st.error("❌ Failed to unload model")
+            
+            with col2:
+                if st.button("🧹 Clear Memory", type="secondary"):
+                    image_generator.clear_memory()
+                    st.success("GPU memory cleared!")
+            
             # Image generation settings
             with st.expander("⚙️ Image Settings"):
                 # Get device info
@@ -197,12 +214,6 @@ def render_sidebar(chatbot, image_generator):
                 st.write(f"**Model:** {image_generator.config.IMAGE_MODEL}")
                 st.write(f"**Size:** {image_generator.config.IMAGE_WIDTH}x{image_generator.config.IMAGE_HEIGHT}")
                 st.write(f"**Steps:** {image_generator.config.IMAGE_STEPS}")
-                
-                # Clear GPU memory button
-                if device_info['device'] == 'cuda':
-                    if st.button("🧹 Clear GPU Memory"):
-                        image_generator.clear_memory()
-                        st.success("GPU memory cleared!")
         
         # Controls
         st.header("🎛️ Controls")
@@ -224,30 +235,52 @@ def render_chat_history():
             
             # Display image if it exists in the message
             if "image_data" in message:
-                import base64
-                from PIL import Image
-                import io
-                
-                # Decode base64 image data
-                image_data = base64.b64decode(message["image_data"])
-                image = Image.open(io.BytesIO(image_data))
-                
-                # Display image with proper caption at natural size (max 512px width)
-                st.image(image, caption=f"Generated: {message.get('image_prompt', 'Image')}", width=512)
-                
-                # Add download button for historical images
-                if "image_filepath" in message:
-                    try:
-                        with open(message["image_filepath"], "rb") as file:
-                            st.download_button(
-                                label="📥 Download Image",
-                                data=file.read(),
-                                file_name=f"generated_image_{message.get('image_prompt', 'image').replace(' ', '_')}.png",
-                                mime="image/png",
-                                key=f"download_{hash(message['image_filepath'])}"  # Unique key for each download button
-                            )
-                    except FileNotFoundError:
-                        st.caption("💾 Image file moved or deleted")
+                display_chat_image(message)
+
+def display_chat_image(message: dict):
+    """Consolidated image display logic for chat history"""
+    try:
+        import base64
+        from PIL import Image
+        import io
+        
+        # Decode base64 image data
+        image_data = base64.b64decode(message["image_data"])
+        image = Image.open(io.BytesIO(image_data))
+        
+        # Display image with proper caption at natural size (max 512px width)
+        st.image(image, caption=f"Generated: {message.get('image_prompt', 'Image')}", width=512)
+        
+        # Add download button for historical images
+        if "image_filepath" in message and os.path.exists(message["image_filepath"]):
+            try:
+                with open(message["image_filepath"], "rb") as file:
+                    st.download_button(
+                        label="📥 Download Image",
+                        data=file.read(),
+                        file_name=f"generated_image_{message.get('image_prompt', 'image').replace(' ', '_').replace('/', '_')}.png",
+                        mime="image/png",
+                        key=f"download_{hash(message['image_filepath'])}"  # Unique key for each download button
+                    )
+            except (FileNotFoundError, OSError):
+                st.caption("💾 Image file moved or deleted")
+        else:
+            st.caption("💾 Image file not available")
+    except Exception as e:
+        st.error(f"Error displaying image: {str(e)}")
+
+# Add session cleanup function
+def cleanup_old_images_from_session(max_images: int = 10):
+    """Clean up old base64 images from session state to prevent memory leaks"""
+    if "messages" in st.session_state:
+        image_messages = [msg for msg in st.session_state.messages if "image_data" in msg]
+        
+        # If we have too many images, remove base64 data from oldest ones
+        if len(image_messages) > max_images:
+            for msg in image_messages[:-max_images]:  # Keep only the last max_images
+                if "image_data" in msg:
+                    del msg["image_data"]  # Remove base64 data but keep metadata
+                    msg["_image_cleaned"] = True  # Mark as cleaned for UI
 
 def detect_image_request(prompt: str) -> bool:
     """Detect if the user is requesting image generation"""
@@ -305,36 +338,46 @@ def handle_chat_input(chatbot, image_generator):
                     image, filepath = image_generator.generate_image(image_prompt)
                     
                     if image:
+                        # Display the generated image using consolidated logic
                         st.image(image, caption=f"Generated: {image_prompt}", width=512)
                         
-                        # Add download button
+                        # Add download button with improved filename handling
+                        safe_filename = image_prompt.replace(' ', '_').replace('/', '_')[:50]  # Limit filename length
                         with open(filepath, "rb") as file:
                             st.download_button(
                                 label="📥 Download Image",
                                 data=file.read(),
-                                file_name=f"generated_image_{int(time.time())}.png",
+                                file_name=f"generated_{safe_filename}_{int(time.time())}.png",
                                 mime="image/png"
                             )
                         
                         response_text = f"✅ Image generated successfully! Prompt: '{image_prompt}'"
                         st.markdown(response_text)
                         
-                        # Store image data in session state for proper display in chat history
+                        # Store image data in session state (with cleanup to prevent memory leaks)
                         import base64
                         import io
                         
-                        # Convert image to base64 for embedding in chat history
+                        # Convert image to base64 for embedding in chat history (smaller size)
                         img_buffer = io.BytesIO()
-                        image.save(img_buffer, format='PNG')
+                        # Resize image for storage to reduce memory usage
+                        stored_image = image.copy()
+                        if stored_image.size[0] > 512 or stored_image.size[1] > 512:
+                            stored_image.thumbnail((512, 512), Image.Resampling.LANCZOS)
+                        stored_image.save(img_buffer, format='PNG', optimize=True)
                         img_str = base64.b64encode(img_buffer.getvalue()).decode()
                         
                         st.session_state.messages.append({
                             "role": "assistant", 
-                            "content": f"{response_text}",
+                            "content": response_text,
                             "image_data": img_str,
                             "image_prompt": image_prompt,
                             "image_filepath": filepath
                         })
+                        
+                        # Clean up old images to prevent memory bloat
+                        cleanup_old_images_from_session(max_images=5)
+                        
                     else:
                         error_msg = f"❌ Failed to generate image: {filepath}"  # filepath contains error message
                         st.error(error_msg)
