@@ -1,6 +1,8 @@
 volumes:
   ollama_storage:
     driver: local
+  huggingface_cache:
+    driver: local
 
 services:
   ollama-app:
@@ -23,6 +25,7 @@ services:
       #- OLLAMA_MAX_LOADED_MODELS=1
 
   app:
+    profiles: ["cpu"]
     build: .
     container_name: streamlit-app
     restart: unless-stopped
@@ -30,10 +33,37 @@ services:
       - "8501:8501"
     volumes:
       - ./data:/app/data
+      - huggingface_cache:/root/.cache/huggingface
     environment:
       - OLLAMA_BASE_URL=http://ollama-app:11434
     depends_on:
       - ollama-app
+
+  # 🎮 GPU-ENABLED VERSION (RTX 4090, RTX 3060, etc.)
+  # =================================================
+  # Same as above but with GPU support enabled
+  # Use: docker-compose --profile gpu up --build
+  app-gpu:
+    profiles: ["gpu"]
+    build: .
+    container_name: streamlit-app-gpu
+    restart: unless-stopped
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - huggingface_cache:/root/.cache/huggingface
+    environment:
+      - OLLAMA_BASE_URL=http://ollama-app:11434
+    depends_on:
+      - ollama-app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   ollama-pull-models:
     image: ollama/ollama:latest

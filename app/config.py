@@ -24,6 +24,15 @@ class Config:
     # Streamlit settings
     STREAMLIT_SERVER_PORT = int(os.getenv('STREAMLIT_SERVER_PORT', 8501))
     
+    # Image generation settings
+    IMAGE_MODEL = os.getenv('IMAGE_MODEL', 'runwayml/stable-diffusion-v1-5')
+    IMAGE_HEIGHT = int(os.getenv('IMAGE_HEIGHT', 512))
+    IMAGE_WIDTH = int(os.getenv('IMAGE_WIDTH', 512))
+    IMAGE_STEPS = int(os.getenv('IMAGE_STEPS', 20))  # Lower for faster generation
+    IMAGE_GUIDANCE_SCALE = float(os.getenv('IMAGE_GUIDANCE_SCALE', 7.5))
+    IMAGE_OUTPUT_DIR = os.getenv('IMAGE_OUTPUT_DIR', './data/generated_images')
+    IMAGE_AUTO_LOAD = os.getenv('IMAGE_AUTO_LOAD', 'true').lower() == 'true'  # Auto-load model on startup
+    
     @classmethod
     def validate_config(cls):
         """Validate configuration settings with robust error handling"""
