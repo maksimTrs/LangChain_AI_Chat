@@ -1,15 +1,27 @@
 from langchain.memory import ConversationBufferWindowMemory
-from langchain.schema import BaseMessage, HumanMessage, AIMessage
+from langchain.schema import BaseMessage
+from langchain_core.messages import HumanMessage, AIMessage # Moved import to top
 from langchain_community.chat_message_histories import SQLChatMessageHistory
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncEngine
 from app.config import Config
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union # Added Union
 import asyncio
 import concurrent.futures
+import logging
+
+logger = logging.getLogger(__name__)
 
 class ChatMemoryManager:
     """Manages conversation memory with database persistence"""
     
+    memory_size: int
+    session_id: str
+    config: Config
+    async_engine: AsyncEngine
+    sql_history: SQLChatMessageHistory
+    memory: ConversationBufferWindowMemory
+    _executor: concurrent.futures.ThreadPoolExecutor
+
     def __init__(self, session_id: str, memory_size: int = 10):
         self.memory_size = memory_size
         self.session_id = session_id
@@ -21,7 +33,7 @@ class ChatMemoryManager:
         # Initialize SQL chat message history
         self.sql_history = SQLChatMessageHistory(
             session_id=session_id,
-            connection=self.async_engine,
+            connection=self.async_engine, # type: ignore - SQLAlchemy aiosqlite engine is compatible
             table_name=self.config.DATABASE_TABLE_NAME,
             async_mode=True
         )
@@ -37,16 +49,16 @@ class ChatMemoryManager:
         # Create thread pool for handling sync-to-async bridges
         self._executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
     
-    async def add_message_async(self, message_type: str, content: str):
+    async def add_message_async(self, message_type: str, content: str) -> None:
         """Add a message to the chat history asynchronously."""
         try:
-            from langchain_core.messages import HumanMessage, AIMessage
+            # from langchain_core.messages import HumanMessage, AIMessage # Already imported
             if message_type == "user":
                 await self.sql_history.aadd_message(HumanMessage(content=content))
             elif message_type == "ai":
                 await self.sql_history.aadd_message(AIMessage(content=content))
         except Exception as e:
-            print(f"Error adding message to memory: {e}")
+            logger.error(f"Error adding message to memory: {e}", exc_info=True)
     
     def add_message(self, message_type: str, content: str) -> None:
         """Add a message to memory (sync version with proper async handling)"""
@@ -64,23 +76,26 @@ class ChatMemoryManager:
                 loop = asyncio.get_event_loop()
                 future = asyncio.ensure_future(self.add_message_async(message_type, content))
                 # Add a callback to handle any errors
-                future.add_done_callback(lambda f: print(f"Error in background task: {f.exception()}") if f.exception() else None)
+                future.add_done_callback(
+                    lambda f: logger.error(f"Error in background task for add_message: {f.exception()}", exc_info=f.exception()) if f.exception() else None
+                )
             else:
-                print(f"Error adding message: {e}")
+                logger.error(f"Error adding message: {e}", exc_info=True)
         except Exception as e:
-            print(f"Error adding message: {e}")
+            logger.error(f"Error adding message: {e}", exc_info=True)
     
     def get_memory_variables(self) -> Dict[str, Any]:
         """Get memory variables for LangChain"""
-        return self.memory.load_memory_variables({})
+        return self.memory.load_memory_variables({}) # type: ignore
     
-    async def get_chat_history_async(self):
+    async def get_chat_history_async(self) -> List[Dict[str, str]]:
         """Get the chat history asynchronously formatted for Streamlit."""
         try:
-            messages = await self.sql_history.aget_messages()
-            formatted_messages = []
+            messages: List[BaseMessage] = await self.sql_history.aget_messages()
+            formatted_messages: List[Dict[str, str]] = []
             for msg in messages:
-                if hasattr(msg, 'type'):
+                role: str
+                if hasattr(msg, 'type'): # Langchain > 0.1.0
                     role = "user" if msg.type == "human" else "assistant"
                 else:
                     role = "user" if isinstance(msg, HumanMessage) else "assistant"
@@ -90,7 +105,7 @@ class ChatMemoryManager:
                 })
             return formatted_messages
         except Exception as e:
-            print(f"Error getting chat history: {e}")
+            logger.error(f"Error getting chat history async: {e}", exc_info=True)
             return []
     
     def get_chat_history(self) -> List[dict]:
@@ -107,15 +122,16 @@ class ChatMemoryManager:
                 # No running loop, we can safely run async code
                 return asyncio.run(self.get_chat_history_async())
         except Exception as e:
-            print(f"Error getting chat history, returning empty list: {e}")
+            logger.error(f"Error getting chat history sync: {e}", exc_info=True)
             return []
     
     async def clear_conversation_async(self):
         """Clear the conversation history asynchronously."""
         try:
             await self.sql_history.aclear()
+            logger.info(f"Conversation cleared for session_id: {self.session_id}")
         except Exception as e:
-            print(f"Error clearing conversation: {e}")
+            logger.error(f"Error clearing conversation async for session_id {self.session_id}: {e}", exc_info=True)
     
     def clear_memory(self) -> None:
         """Clear all conversation memory with proper async handling"""
@@ -129,7 +145,7 @@ class ChatMemoryManager:
                 # No running loop, we can safely run async code
                 asyncio.run(self.clear_conversation_async())
         except Exception as e:
-            print(f"Error clearing memory: {e}")
+            logger.error(f"Error clearing memory for session_id {self.session_id}: {e}", exc_info=True)
     
     def get_memory_summary(self) -> Dict[str, Any]:
         """Get summary of current memory state"""
