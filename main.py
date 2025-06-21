@@ -10,8 +10,18 @@ import time
 import os
 from PIL import Image
 
+from typing import Optional, List, Dict, Any # Add necessary types
+
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
+
+# --- Setup Logging ---
+# IMPORTANT: This should be one of the first imports and calls
+import logging
+from app.logging_config import setup_logging
+setup_logging() # Initialize logging configuration
+logger = logging.getLogger(__name__)
+
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -27,61 +37,71 @@ def load_css(file_path):
         with open(file_path) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except FileNotFoundError:
+        logger.warning(f"CSS file not found at {file_path}. Skipping custom styles.")
         st.warning(f"CSS file not found at {file_path}")
 
 load_css("static/style.css")
 
 # --- Session State Initialization ---
-def init_session_state():
+def init_session_state() -> None:
     if "session_id" not in st.session_state:
-        st.session_state.session_id = str(uuid.uuid4())
+        st.session_state.session_id: str = str(uuid.uuid4())
     if "chatbot" not in st.session_state:
-        st.session_state.chatbot = None
+        st.session_state.chatbot: Optional[OllamaChatbot] = None
     if "messages" not in st.session_state:
-        st.session_state.messages = []
+        # Messages can contain text (role, content) or image data too
+        st.session_state.messages: List[Dict[str, Any]] = []
     if "user_id" not in st.session_state:
-        st.session_state.user_id = "User"
+        st.session_state.user_id: str = "User" # Default user ID
     if "selected_role" not in st.session_state:
-        st.session_state.selected_role = "Beginner"
+        st.session_state.selected_role: str = "Beginner" # Default role
     if "image_generator" not in st.session_state:
-        st.session_state.image_generator = None
+        st.session_state.image_generator: Optional[ImageGenerator] = None
 
 init_session_state()
 
 # --- Chatbot Initialization ---
 @st.cache_resource
-def get_chatbot(_user_id, _role):
+def get_chatbot(_user_id: str, _role: str) -> OllamaChatbot:
     """Initialize and cache the chatbot instance"""
     try:
+        logger.info(f"Attempting to initialize chatbot for user_id: {_user_id}, role: {_role}")
         chatbot = OllamaChatbot(session_id=_user_id)
-        chatbot.update_system_prompt(_role)
+        # update_system_prompt now logs success/failure internally
+        if not chatbot.update_system_prompt(_role): # It returns bool
+             logger.warning(f"Chatbot initialized but failed to set role: {_role} for user_id: {_user_id}")
+        logger.info(f"Chatbot initialized successfully for user_id: {_user_id}")
         return chatbot
     except Exception as e:
+        logger.error(f"❌ Failed to initialize chatbot for user_id: {_user_id}: {str(e)}", exc_info=True)
         st.error(f"❌ Failed to initialize chatbot: {str(e)}")
         st.info("Please make sure Ollama is running and the model is available.")
         st.stop()
 
 # --- Image Generator Initialization ---
 @st.cache_resource
-def get_image_generator():
+def get_image_generator() -> ImageGenerator:
     """Initialize and cache the image generator instance"""
-    generator = ImageGenerator()
+    generator: ImageGenerator = ImageGenerator()
     
     # Auto-load model if enabled in config
     if generator.config.IMAGE_AUTO_LOAD and not generator.is_model_loaded():
-        print("🚀 Auto-loading image generation model...")
+        logger.info("🚀 Auto-loading image generation model as per config.")
         # Show user-friendly message
         st.info("🚀 Loading Stable Diffusion model for image generation...")
+        # load_model now logs internally
         success = generator.load_model()
         if success:
+            logger.info("✅ Image generation model auto-loaded successfully.")
             st.success("✅ Image generation ready!")
         else:
+            logger.error("❌ Failed to auto-load image model.")
             st.error("❌ Failed to load image model")
     
     return generator
 
 # --- UI Components ---
-def render_sidebar(chatbot, image_generator):
+def render_sidebar(chatbot: OllamaChatbot, image_generator: ImageGenerator) -> None:
     """Render the sidebar UI components"""
     with st.sidebar:
         st.header("🛠️ Configuration")
@@ -146,13 +166,18 @@ def render_sidebar(chatbot, image_generator):
             )
             
             if selected_model != current_model:
+                logger.info(f"User selected new model: {selected_model}. Current: {current_model}")
                 with st.spinner(f'🔄 Switching to {selected_model}...'):
+                    # switch_model logs internally
                     if chatbot.switch_model(selected_model):
+                        logger.info(f"Successfully switched model to {selected_model}")
                         st.success(f"✅ Switched to {selected_model}")
                         st.rerun()
                     else:
+                        logger.error(f"Failed to switch model to {selected_model} in UI.")
                         st.error(f"❌ Failed to switch to {selected_model}")
         else:
+            logger.warning("No models available from Ollama to display in sidebar.")
             st.warning("⚠️ No models available")
         
         st.markdown("---")
@@ -174,11 +199,15 @@ def render_sidebar(chatbot, image_generator):
         if not image_generator.is_model_loaded():
             st.info("🔄 Image model not loaded")
             if st.button("🔄 Load Image Model", type="primary"):
+                    logger.info("User clicked 'Load Image Model'")
                 with st.spinner("Loading image generation model..."):
+                        # load_model logs internally
                     if image_generator.load_model():
+                            logger.info("Image model loaded successfully by user action.")
                         st.success("✅ Image model loaded!")
                         st.rerun()
                     else:
+                            logger.error("Failed to load image model by user action.")
                         st.error("❌ Failed to load image model")
         else:
             st.success("✅ Image model ready")
@@ -191,15 +220,20 @@ def render_sidebar(chatbot, image_generator):
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("🗑️ Unload Model", type="secondary"):
+                    logger.info("User clicked 'Unload Model'")
+                    # unload_model logs internally
                     if image_generator.unload_model():
+                        logger.info("Image model unloaded successfully by user action.")
                         st.success("✅ Model unloaded!")
                         st.rerun()
                     else:
+                        logger.error("Failed to unload image model by user action.")
                         st.error("❌ Failed to unload model")
             
             with col2:
                 if st.button("🧹 Clear Memory", type="secondary"):
-                    image_generator.clear_memory()
+                    logger.info("User clicked 'Clear Memory' for image generator.")
+                    image_generator.clear_memory() # clear_memory logs internally
                     st.success("GPU memory cleared!")
             
             # Image generation settings
@@ -218,26 +252,38 @@ def render_sidebar(chatbot, image_generator):
         # Controls
         st.header("🎛️ Controls")
         if st.button("🗑️ Clear Conversation", type="secondary"):
-            chatbot.clear_conversation()
+            logger.info(f"User {st.session_state.user_id} clicked 'Clear Conversation'")
+            chatbot.clear_conversation() # This logs internally
             st.session_state.messages = []
             st.rerun()
         
         if st.button("🔄 Restart Chatbot", type="secondary"):
+            logger.info(f"User {st.session_state.user_id} clicked 'Restart Chatbot'")
             st.cache_resource.clear()
+            logger.info("Cleared all @st.cache_resource for chatbot restart.")
             st.session_state.messages = []
+            # Also clear other relevant session state items if any were added that persist across chatbot instances
+            # For example, if chatbot or image_generator instances were stored directly:
+            if 'chatbot' in st.session_state:
+                del st.session_state.chatbot
+                logger.debug("Removed 'chatbot' from session_state.")
+            if 'image_generator' in st.session_state: # Though image_generator is often independent of user_id
+                del st.session_state.image_generator # This might be too aggressive if it's meant to persist globally
+                logger.debug("Potentially removed 'image_generator' from session_state during chatbot restart.")
             st.rerun()
 
-def render_chat_history():
+def render_chat_history() -> None:
     """Render the chat history"""
+    # st.session_state.messages is List[Dict[str, Any]]
     for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+        with st.chat_message(message["role"]): # type: ignore # streamlit type hints might not be perfect for session_state structure
+            st.markdown(message["content"]) # type: ignore
             
             # Display image if it exists in the message
             if "image_data" in message:
                 display_chat_image(message)
 
-def display_chat_image(message: dict):
+def display_chat_image(message: Dict[str, Any]) -> None:
     """Consolidated image display logic for chat history"""
     try:
         import base64
@@ -262,11 +308,14 @@ def display_chat_image(message: dict):
                         mime="image/png",
                         key=f"download_{hash(message['image_filepath'])}"  # Unique key for each download button
                     )
-            except (FileNotFoundError, OSError):
+            except (FileNotFoundError, OSError) as e:
+                logger.warning(f"Could not offer download for {message.get('image_filepath', 'N/A')}: {e}", exc_info=True)
                 st.caption("💾 Image file moved or deleted")
         else:
+            logger.debug(f"Image file not available or path not set for message: {message.get('image_prompt', 'N/A')}")
             st.caption("💾 Image file not available")
     except Exception as e:
+        logger.error(f"Error displaying chat image for prompt {message.get('image_prompt', 'N/A')}: {str(e)}", exc_info=True)
         st.error(f"Error displaying image: {str(e)}")
 
 # Add session cleanup function

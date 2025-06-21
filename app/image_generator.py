@@ -8,14 +8,27 @@ from diffusers import DiffusionPipeline, StableDiffusionPipeline
 from PIL import Image
 import streamlit as st
 from app.config import Config
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Forward declaration for type hint if StableDiffusionPipeline is not directly imported at top level for it
+# However, it is imported, so direct usage is fine.
+# StableDiffusionPipeline = "diffusers.StableDiffusionPipeline"
 
 class ImageGenerator:
     """Image generation class using HuggingFace diffusers"""
+
+    config: Config
+    pipeline: Optional[StableDiffusionPipeline]
+    device: Optional[str]
+    model_loaded: bool
+    output_dir: Path
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.config = Config()
         self.pipeline = None
-        self.device = None
+        self.device = None # Will be set in _setup_device
         self.model_loaded = False
         
         # Setup output directory
@@ -31,19 +44,21 @@ class ImageGenerator:
             self.device = "cuda"
             # Check VRAM availability
             gpu_memory = torch.cuda.get_device_properties(0).total_memory / (1024**3)  # GB
-            print(f"🎮 GPU detected: {torch.cuda.get_device_name(0)} ({gpu_memory:.1f}GB)")
+            logger.info(f"🎮 GPU detected: {torch.cuda.get_device_name(0)} ({gpu_memory:.1f}GB)")
         else:
             self.device = "cpu"
-            print("💻 Using CPU for image generation (this will be slower)")
+            logger.info("💻 Using CPU for image generation (this will be slower)")
     
     @st.cache_resource
     def load_model(_self) -> bool:
         """Load and cache the image generation model"""
         if _self.model_loaded:
+            # This message is fine, no need to change
+            # logger.debug("Image model already loaded.")
             return True
             
         try:
-            print(f"🔄 Loading image model: {_self.config.IMAGE_MODEL}")
+            logger.info(f"🔄 Loading image model: {_self.config.IMAGE_MODEL} on device: {_self.device}")
             
             # Load model with appropriate settings for device
             if _self.device == "cuda":
@@ -70,11 +85,11 @@ class ImageGenerator:
                 
             _self.model_loaded = True
             
-            print(f"✅ Image model loaded successfully on {_self.device}")
+            logger.info(f"✅ Image model loaded successfully on {_self.device}")
             return True
             
         except Exception as e:
-            print(f"❌ Failed to load image model: {str(e)}")
+            logger.error(f"❌ Failed to load image model: {str(e)}", exc_info=True)
             _self.model_loaded = False
             return False
     
@@ -109,7 +124,7 @@ class ImageGenerator:
             if seed is not None:
                 torch.manual_seed(seed)
             
-            print(f"🎨 Generating image with prompt: '{prompt[:50]}...'")
+            logger.info(f"🎨 Generating image with prompt: '{prompt[:50]}...' on device {self.device}")
             start_time = time.time()
             
             # Generate image
@@ -132,22 +147,27 @@ class ImageGenerator:
             filepath = self.output_dir / filename
             image.save(filepath, "PNG")
             
-            print(f"✅ Image generated in {generation_time:.2f}s: {filename}")
+            logger.info(f"✅ Image generated in {generation_time:.2f}s: {filename}")
             return image, str(filepath)
             
         except Exception as e:
             error_msg = f"Error generating image: {str(e)}"
-            print(f"❌ {error_msg}")
+            logger.error(f"❌ {error_msg}", exc_info=True)
             return None, error_msg
     
+from typing import Dict, Any # Add Dict, Any
+
+# ... (other imports)
+
+# ... (inside ImageGenerator class)
     def _generate_filename(self, prompt: str) -> str:
         """Generate a unique filename based on prompt and timestamp"""
         # Create hash of prompt for uniqueness
-        prompt_hash = hashlib.md5(prompt.encode()).hexdigest()[:8]
-        timestamp = int(time.time())
+        prompt_hash: str = hashlib.md5(prompt.encode()).hexdigest()[:8]
+        timestamp: int = int(time.time())
         
         # Clean prompt for filename (take first 30 chars, remove special characters)
-        clean_prompt = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).strip()
+        clean_prompt: str = "".join(c for c in prompt[:30] if c.isalnum() or c in (' ', '-', '_')).strip()
         clean_prompt = clean_prompt.replace(' ', '_')
         
         return f"{clean_prompt}_{prompt_hash}_{timestamp}.png"
@@ -156,9 +176,9 @@ class ImageGenerator:
         """Check if the model is loaded and ready"""
         return self.model_loaded
     
-    def get_device_info(self) -> dict:
+    def get_device_info(self) -> Dict[str, Any]:
         """Get information about the device being used"""
-        info = {
+        info: Dict[str, Any] = {
             "device": self.device,
             "model_loaded": self.model_loaded,
             "output_dir": str(self.output_dir)
@@ -178,7 +198,7 @@ class ImageGenerator:
         """Clear GPU memory if using CUDA"""
         if self.device == "cuda" and torch.cuda.is_available():
             torch.cuda.empty_cache()
-            print("🧹 GPU memory cleared")
+            logger.info("🧹 GPU memory cleared")
     
     def unload_model(self) -> bool:
         """Properly unload the model and clear memory"""
@@ -194,13 +214,15 @@ class ImageGenerator:
                 
                 # Clear Streamlit cache
                 if hasattr(st, 'cache_resource'):
-                    st.cache_resource.clear()
+                    st.cache_resource.clear() # This clears all resources, be cautious
+                    logger.info("Cleared all Streamlit cache resources during image model unload.")
                 
-                print("🧹 Image model unloaded successfully")
+                logger.info("🧹 Image model unloaded successfully")
                 return True
+            logger.info("Attempted to unload model, but no model was loaded or pipeline was None.")
             return True
         except Exception as e:
-            print(f"❌ Error unloading model: {str(e)}")
+            logger.error(f"❌ Error unloading model: {str(e)}", exc_info=True)
             return False
     
     def __del__(self):
