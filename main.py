@@ -232,8 +232,8 @@ def render_chat_history():
                 image_data = base64.b64decode(message["image_data"])
                 image = Image.open(io.BytesIO(image_data))
                 
-                # Display image with proper caption
-                st.image(image, caption=f"Generated: {message.get('image_prompt', 'Image')}", use_container_width=True)
+                # Display image with proper caption at natural size (max 512px width)
+                st.image(image, caption=f"Generated: {message.get('image_prompt', 'Image')}", width=512)
                 
                 # Add download button for historical images
                 if "image_filepath" in message:
@@ -305,7 +305,7 @@ def handle_chat_input(chatbot, image_generator):
                     image, filepath = image_generator.generate_image(image_prompt)
                     
                     if image:
-                        st.image(image, caption=f"Generated: {image_prompt}", use_container_width=True)
+                        st.image(image, caption=f"Generated: {image_prompt}", width=512)
                         
                         # Add download button
                         with open(filepath, "rb") as file:
