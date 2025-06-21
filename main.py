@@ -289,7 +289,8 @@ def detect_image_request(prompt: str) -> bool:
         "generate picture", "create picture", "make picture", "visualize",
         "show me", "illustrate", "sketch", "render", "design", "generate image of",
         "create image of", "make image of", "draw image", "paint image", "visualize image",
-        "prepare image", "prepare picture"
+        "prepare image", "prepare picture", "generate an image", "generate a picture",
+        "create an image", "create a picture"
     ]
     
     prompt_lower = prompt.lower()
