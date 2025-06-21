@@ -3,9 +3,10 @@
 A complete AI chatbot solution featuring:
 - 🦜 **LangChain** for conversation management
 - 🦙 **Ollama** for local LLM inference (via Docker)
+- 🎨 **Stable Diffusion** for local image generation (GPU/CPU support)
 - 🗄️ **SQLite Database** for persistent conversation storage
 - 🧠 **Memory Management** for conversation context per session
-- 🐳 **Docker** for easy deployment
+- 🐳 **Docker** for easy deployment with GPU profiles
 - ⚡ **Streamlit** for a beautiful web interface
 
 ## 🏗️ Project Structure
@@ -16,9 +17,11 @@ LangChain_AI_Chat/
 │   ├── __init__.py
 │   ├── chatbot.py
 │   ├── memory_manager.py
+│   ├── image_generator.py      # Image generation logic
 │   └── config.py
 ├── data/
-│   └── chathistory.db          # SQLite database (auto-created)
+│   ├── chathistory.db          # SQLite database (auto-created)
+│   └── generated_images/       # Generated images storage
 ├── static/
 │   └── style.css
 ├── .gitignore
@@ -27,7 +30,9 @@ LangChain_AI_Chat/
 ├── main.py
 ├── README.md
 ├── requirements.txt
-└── SETUP_GUIDE.md
+├── SETUP_GUIDE.md
+├── IMAGE_GENERATION_GUIDE.md   # Image generation documentation
+└── setup_image_generation.py   # Image setup validation
 ```
 
 ## 🚀 Quick Start
@@ -46,16 +51,26 @@ cd LangChain_AI_Chat
 ```
 
 2. **Start the services:**
+
+**For GPU users (RTX 4090, RTX 3060, etc.):**
 ```bash
-docker compose up -d --build
+docker-compose --profile gpu up --build
 ```
+
+**For CPU-only users:**
+```bash
+docker-compose up --build
+```
+
 This will build the Streamlit application image and start all services in the correct order.
 
 3. **Ollama models:**
-The `docker-compose.yml` is configured to automatically pull the default model (`gemma:2b`). The model pulling service will wait until the Ollama service is healthy before starting.
+The `docker-compose.yml` is configured to automatically pull the default models (`gemma:2b`, `llama3.2:1b`). The model pulling service will wait until the Ollama service is healthy before starting.
 
 4. **Access the chatbot:**
    - Open http://localhost:8501 in your browser.
+   - Use chat for conversations
+   - Use commands like "generate image of a sunset" for image creation
 
 ## 🔧 Configuration
 
@@ -74,6 +89,18 @@ You can customize the application by creating a `.env` file in the root of the p
 | `DATABASE_URL` | `sqlite+aiosqlite:///data/chathistory.db` | SQLite database connection string. |
 | `DATABASE_TABLE_NAME` | `message_store` | Database table name for storing messages. |
 | `STREAMLIT_SERVER_PORT` | `8501` | Web interface port. |
+
+### Image Generation Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IMAGE_MODEL` | `runwayml/stable-diffusion-v1-5` | Hugging Face model ID for image generation. |
+| `IMAGE_HEIGHT` | `512` | Generated image height in pixels. |
+| `IMAGE_WIDTH` | `512` | Generated image width in pixels. |
+| `IMAGE_STEPS` | `20` | Number of inference steps (higher = better quality). |
+| `IMAGE_GUIDANCE_SCALE` | `7.5` | How closely to follow the prompt (1-20). |
+| `IMAGE_OUTPUT_DIR` | `./data/generated_images` | Directory to save generated images. |
+| `IMAGE_AUTO_LOAD` | `true` | Automatically load image model on startup. |
 
 ### Available Models
 
@@ -95,6 +122,36 @@ The SQLite database is mapped to your host machine via Docker volumes:
 - **Schema**: Stores session IDs, message content, timestamps, and metadata
 - **Backup**: You can backup conversations by copying the `data/chathistory.db` file
 
+## 🎨 Image Generation Features
+
+The chatbot includes local image generation powered by Stable Diffusion:
+
+### Supported Commands
+- `generate image of [description]`
+- `create picture of [description]` 
+- `draw [description]`
+- `illustrate [description]`
+
+### Key Features
+- **Local Generation**: No external APIs required
+- **GPU Acceleration**: Automatic GPU detection and optimization
+- **Memory Management**: Smart memory handling for GPU/CPU
+- **Download Support**: Download generated images
+- **Chat Integration**: Images appear directly in chat history
+- **Persistent Storage**: Images saved to `./data/generated_images/`
+
+### Performance
+- **GPU (RTX 4090)**: ~2-5 seconds per image
+- **GPU (RTX 3060)**: ~5-15 seconds per image  
+- **CPU**: 2-10 minutes per image (not recommended)
+
+### Requirements
+- **GPU Mode**: NVIDIA GPU with 4GB+ VRAM
+- **CPU Mode**: 8GB+ system RAM (very slow)
+- **Storage**: 5GB+ for model downloads
+
+> 📖 **Detailed Guide**: See [IMAGE_GENERATION_GUIDE.md](IMAGE_GENERATION_GUIDE.md) for complete setup instructions.
+
 ## 🐳 Docker Services
 
 ### Ollama Service (`ollama-app`)
@@ -103,11 +160,16 @@ The SQLite database is mapped to your host machine via Docker volumes:
 - **Volume**: Persistent model storage.
 - **Health Check**: Ensures the service is fully running before dependent services start.
 
-### App Service (`app`)
+### App Service (`app` / `app-gpu`)
 - **Build**: From the `Dockerfile` in the root directory.
 - **Port**: `8501`
-- **Volume**: `./data:/app/data` for database persistence
-- **Dependencies**: Waits for the `ollama-pull-models` service to complete successfully.
+- **Volumes**: 
+  - `./data:/app/data` for database and image persistence
+  - `huggingface_cache:/root/.cache/huggingface` for model caching
+- **Profiles**: 
+  - `app` (CPU profile): Default, no GPU acceleration
+  - `app-gpu` (GPU profile): NVIDIA GPU acceleration enabled
+- **Dependencies**: Waits for the `ollama-app` service to be healthy.
 
 ### Ollama Pull Models Service (`ollama-pull-models`)
 - **Image**: `ollama/ollama:latest`
@@ -160,11 +222,24 @@ The SQLite database is mapped to your host machine via Docker volumes:
 
 ## 🎛️ Web Interface Features
 
+### Chat Features
 - **Real-time Chat**: Instant responses with typing indicators
+- **Image Generation**: Generate images directly in chat
 - **Memory Controls**: Clear conversation, restart bot
+- **Download Support**: Download generated images
+
+### Sidebar Controls
+- **Model Selection**: Switch between available LLM models
+- **Response Style**: Choose complexity level (Beginner/Expert/PhD)
+- **Image Generation**: Load/unload image models, GPU memory management
 - **Model Information**: View current model and settings
 - **Conversation Summary**: Statistics and message count
+
+### Technical Features
 - **Responsive Design**: Works on desktop and mobile
+- **Session Management**: Independent conversations per user
+- **Persistent Storage**: Chat history and images survive restarts
+- **GPU Monitoring**: Real-time GPU memory usage (GPU mode)
 
 ## 🔍 Troubleshooting
 

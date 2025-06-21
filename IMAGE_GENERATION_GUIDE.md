@@ -50,7 +50,7 @@ docker-compose run --rm app python setup_image_generation.py
 
 ### 3. Download Images
 
-- Images appear directly in the chat
+- Images appear directly in the chat at proper 512x512 size
 - Click "📥 Download Image" to save locally
 - Images are also saved in `./data/generated_images/`
 
