@@ -126,7 +126,7 @@ The SQLite database is mapped to your host machine via Docker volumes:
          ▼                      ▼                      ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌────────────────┐
 │     main.py     │    │   chatbot.py    │    │  Local Models  │
-│    (UI Logic)   │    │  (Chat Logic)   │    │  (gemma:2b, etc.)│
+│    (UI Logic)   │    │  (Chat Logic)   │    │ (gemma:2b,etc.)│
 └─────────────────┘    └─────────────────┘    └────────────────┘
          │                      │                      │
          ▼                      ▼                      ▼
