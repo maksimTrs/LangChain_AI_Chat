@@ -270,8 +270,18 @@ def display_chat_image(message: dict):
         st.error(f"Error displaying image: {str(e)}")
 
 # Add session cleanup function
-def cleanup_old_images_from_session(max_images: int = 10):
+def cleanup_old_images_from_session(max_images: int = None):
     """Clean up old base64 images from session state to prevent memory leaks"""
+    if max_images is None:
+        # Check if chatbot exists and is not None
+        if "chatbot" in st.session_state and st.session_state.chatbot is not None:
+            max_images = st.session_state.chatbot.config.MAX_STORED_IMAGES
+        else:
+            # Fall back to Config directly
+            from app.config import Config
+            config = Config()
+            max_images = config.MAX_STORED_IMAGES
+    
     if "messages" in st.session_state:
         image_messages = [msg for msg in st.session_state.messages if "image_data" in msg]
         
@@ -379,7 +389,7 @@ def handle_chat_input(chatbot, image_generator):
                         })
                         
                         # Clean up old images to prevent memory bloat
-                        cleanup_old_images_from_session(max_images=5)
+                        cleanup_old_images_from_session()
                         
                     else:
                         error_msg = f"❌ Failed to generate image: {filepath}"  # filepath contains error message

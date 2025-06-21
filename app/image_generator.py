@@ -207,5 +207,5 @@ class ImageGenerator:
         """Cleanup when object is destroyed"""
         try:
             self.unload_model()
-        except:
+        except Exception:
             pass  # Ignore errors during cleanup 

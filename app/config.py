@@ -16,6 +16,7 @@ class Config:
     
     # Chat settings
     CHAT_MEMORY_SIZE = int(os.getenv('CHAT_MEMORY_SIZE', 10))
+    MAX_STORED_IMAGES = int(os.getenv('MAX_STORED_IMAGES', 5))  # Maximum base64 images to keep in session
     
     # Database settings
     DATABASE_URL = os.getenv('DATABASE_URL', 'sqlite+aiosqlite:///data/chathistory.db')

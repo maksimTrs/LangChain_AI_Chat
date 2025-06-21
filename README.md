@@ -76,7 +76,14 @@ The `docker-compose.yml` is configured to automatically pull the default models 
 
 ### Environment Variables
 
-You can customize the application by creating a `.env` file in the root of the project (e.g. add https://smith.langchain.com/ connection to log your LLM chat messages info).
+You can customize the application by creating a `.env` file in the root of the project. We provide a `.env.example` file with all available options:
+
+```bash
+# Copy the example file and customize it
+cp .env.example .env
+```
+
+The `.env.example` file includes all configurable options with descriptions. Main settings include:
 
 | Variable | Default | Description |
 |----------|---------|-------------|

@@ -51,16 +51,22 @@ class ChatMemoryManager:
     def add_message(self, message_type: str, content: str) -> None:
         """Add a message to memory (sync version with proper async handling)"""
         try:
-            # Check if we're in an async context
-            try:
-                loop = asyncio.get_running_loop()
-                # We're in an async context, schedule the task properly
-                task = asyncio.create_task(self.add_message_async(message_type, content))
-                # Don't wait for completion to avoid blocking
-                return
-            except RuntimeError:
-                # No running loop, we can safely run async code
-                asyncio.run(self.add_message_async(message_type, content))
+            # Use nest_asyncio for better async compatibility
+            import nest_asyncio
+            nest_asyncio.apply()
+            
+            # Run the async method properly
+            asyncio.run(self.add_message_async(message_type, content))
+        except RuntimeError as e:
+            # If there's already a running event loop, handle it differently
+            if "another loop is running" in str(e).lower():
+                # Create a future and let it complete in background
+                loop = asyncio.get_event_loop()
+                future = asyncio.ensure_future(self.add_message_async(message_type, content))
+                # Add a callback to handle any errors
+                future.add_done_callback(lambda f: print(f"Error in background task: {f.exception()}") if f.exception() else None)
+            else:
+                print(f"Error adding message: {e}")
         except Exception as e:
             print(f"Error adding message: {e}")
     
